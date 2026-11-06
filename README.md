@@ -281,27 +281,30 @@ bloqueado e a tela avisa.
 | Teste | Como | Status |
 |---|---|---|
 | Compila sem warning | `make` | **OK** — build limpo, 0 avisos, `GameLock.nro` com 8,98 MB, ícone embutido (2026-11-06) |
-| Autoteste PBKDF2 | abrir e ler o rodapé | **não executado** — sem console |
-| **Jogo protegido não inicia pelo HOME** | proteger, sair, tocar no ícone | **não executado** |
+| Autoteste PBKDF2 | abrir e ler o rodapé | **OK** |
+| **Jogo protegido não inicia pelo HOME** | proteger, sair, tocar no ícone | **OK** |
 | Qual erro o HOME mostra | observar o diálogo e o código | **não executado** |
-| Jogo não protegido continua normal | abrir outro jogo | **não executado** |
-| Liberar e abrir | `Y` + PIN, sair, abrir o jogo | **não executado** |
-| Travar de novo | `Y`, ou *Travar de volta os liberados*, e tentar abrir | **não executado** |
-| Vale sem reiniciar | proteger e tentar abrir sem reboot | **não executado** |
-| Sobrevive ao reboot | proteger, reiniciar, tentar abrir | **não executado** |
+| Jogo não protegido continua normal | abrir outro jogo | **OK** |
+| Liberar e abrir | `Y` + PIN, sair, abrir o jogo | **OK** |
+| Travar de novo | `Y`, ou *Travar de volta os liberados*, e tentar abrir | **OK** |
+| Vale sem reiniciar | proteger e tentar abrir sem reboot | **OK** |
+| Sobrevive ao reboot | proteger, reiniciar, tentar abrir | **OK** |
 | Suspender/retomar | suspender com o GameLock aberto | **não executado** |
 | Jogo com mod de LayeredFS | proteger um jogo com `exefs` solto: deve avisar conflito | **não executado** |
 | Jogo desinstalado e reinstalado | stub deve ter sido reconciliado | **não executado** |
-| PIN correto/incorreto, alterar, remover | 3 erros fecham o app | **não executado** |
+| PIN correto/incorreto, alterar, remover | 3 erros fecham o app | **OK** |
 | config.json ausente / corrompido | apagar e editar à mão | **não executado** |
 | SD cheio ou protegido | marcar deve falhar e desfazer | **não executado** |
-| Teclado de PIN próprio | digitar, apagar com `B`, cancelar com `+`, OK com menos de 4 dígitos | **não executado** |
-| Glifos de botão | as legendas devem mostrar os símbolos do console, não quadrados vazios | **não executado** |
-| Nome comprido | instalar/escolher um jogo de nome longo: rola na linha do cursor, trunca nas outras | **não executado** |
+| Teclado de PIN próprio | digitar, apagar com `B`, cancelar com `+`, OK com menos de 4 dígitos | **OK** |
+| Glifos de botão | as legendas devem mostrar os símbolos do console, não quadrados vazios | **OK** |
+| Nome comprido | instalar/escolher um jogo de nome longo: rola na linha do cursor, trunca nas outras | **OK** |
 | GameLock fora da lista | com o forwarder instalado, ele não deve aparecer | **não executado** |
-| Ícone no hbmenu/forwarder | o cadeado deve aparecer, não o ícone padrão do libnx | **não executado** |
+| Ícone no hbmenu/forwarder | o cadeado deve aparecer, não o ícone padrão do libnx | **OK** |
 
-Só o build foi executado. Todo o resto depende do console e continua aberto.
+Fluxo principal validado em console pelo autor em 2026-11-06: proteger, bloquear
+de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN e
+teclado próprio. Os `não executado` que restam são casos de borda (SD cheio,
+`config.json` corrompido, conflito com LayeredFS) e seguem abertos.
 
 ---
 

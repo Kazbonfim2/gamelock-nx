@@ -1,0 +1,4 @@
+build/
+GameLock.elf
+GameLock.nacp
+*.map

@@ -145,6 +145,7 @@ processo atual.
 | Lista | `↑` `↓` / `ZL` `ZR` | navegar / paginar |
 | Lista | `A` | proteger / desproteger (desproteger pede o PIN) |
 | Lista | `Y` | liberar o jogo protegido (pede o PIN) / travar de novo |
+| Lista | `B` | abrir o jogo selecionado, sem passar pelo HOME |
 | Lista | `X` | Configurações |
 | Lista | `+` | sair |
 
@@ -152,6 +153,15 @@ Estados mostrados em cada linha: `livre`, `BLOQUEADO`, `LIBERADO` (protegido mas
 autorizado até travar de novo) e `marcado (proteção off)`.
 
 Com PIN cadastrado, o GameLock pede o PIN **na abertura**: 3 tentativas e fecha.
+
+**Abrir o jogo daqui (`B`).** Evita o ida-e-volta de liberar, sair e procurar o
+ícone no HOME: libera com `Y`, aperta `B`, o jogo abre. Usa
+`appletRequestLaunchApplication` (`applet.h:1455`), que vale em modo application
+e, desde o FW 5.0.0, também em modo applet — os dois jeitos de abrir o GameLock.
+Jogo ainda bloqueado recusa e avisa para liberar antes; os stubs são
+reconciliados **antes** do pedido, porque o loader lê o cartão no momento do
+launch. Aceito o pedido, o GameLock sai sozinho em vez de ficar pendurado atrás
+do jogo.
 
 ### Configurações (`X`)
 
@@ -198,6 +208,15 @@ rola de ida e volta, com pausa nas pontas, dentro de um `SDL_RenderSetClipRect`;
 nas outras linhas, é truncado com `...`. O corte começa por estimativa
 proporcional e só recua, para não medir byte a byte a cada quadro, e respeita
 fronteira de caractere UTF-8 (nome acentuado não quebra no meio).
+
+**Tela de espera** (`draw_loading`): `games_load` pergunta nome e nacp ao `ns`
+título a título, e a reconciliação mexe no cartão — com biblioteca grande são
+alguns segundos de tela parada. Dois quadros cobrem isso. O que **não** dá para
+cobrir é o trecho anterior: o hbloader lendo os 9 MB do `.nro` do cartão SD
+acontece antes do nosso código existir, e aquela tela é do hbmenu. Reduzir o
+`.nro` seria o único jeito de encurtar essa parte, e o peso é do SDL2 + TTF +
+image ligados estaticamente (`--gc-sections` já vem no `switch.specs`, não há o
+que ganhar ali).
 
 **Teclado de PIN próprio** (`main.c:draw_keypad`), em grade 3×4: `1`–`9`, depois
 `<` (apaga), `0` e `OK`. O que você digita aparece mascarado. Direcionais movem,

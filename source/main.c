@@ -675,6 +675,39 @@ static void action_toggle_authorization(Game *game)
     }
 }
 
+// B: abre o jogo selecionado direto daqui, sem passar pelo HOME.
+//
+// appletRequestLaunchApplication (applet.h:1455) vale em modo application e,
+// desde o FW 5.0.0, tambem em modo applet (AppletType_LibraryApplet) -- que e
+// como o GameLock roda quando aberto pelo hbmenu no Album.
+//
+// Retorna true quando o pedido foi aceito: o sistema assume a partir dai e o
+// GameLock deve sair, para nao ficar um processo pendurado atras do jogo.
+static bool action_launch(const Game *game)
+{
+    if (game->locked && g_cfg.protection_enabled && !game->authorized) {
+        msg_set(true, "Jogo protegido: libere com Y antes de abrir.");
+        return false;
+    }
+
+    // O loader le o cartao no momento do launch. Stub sobrando aqui viraria
+    // erro do firmware em vez de jogo aberto, entao reconcilia antes de pedir.
+    g_msg_error = false;
+    apply_blocks("Estado aplicado:");
+    if (g_msg_error) {
+        return false;
+    }
+
+    const Result rc = appletRequestLaunchApplication(game->tid, NULL);
+    if (R_FAILED(rc)) {
+        msg_set(true, "Nao foi possivel abrir o jogo por aqui.");
+        diag_set(true, "appletRequestLaunchApplication(%016lX): 0x%X", game->tid, rc);
+        return false;
+    }
+
+    return true;
+}
+
 // -------------------------------------------------------------------- render
 
 static void icons_sync(Game *games, size_t count, size_t first)
@@ -828,12 +861,13 @@ static void draw_footer_list(void)
         { GLYPH_UP GLYPH_DOWN, "navegar" },
         { GLYPH_A,    "proteger"      },
         { GLYPH_Y,    "liberar"       },
+        { GLYPH_B,    "jogar"         },
         { GLYPH_ZL,   ""              },
         { GLYPH_ZR,   "pagina"        },
         { GLYPH_X,    "configuracoes" },
         { GLYPH_PLUS, "sair"          },
     };
-    draw_legend(48, HINT_Y, list, 7);
+    draw_legend(48, HINT_Y, list, 8);
 
     if (g_msg_error) {
         text(g_font_small, 48, MSG_Y, kError, g_msg);
@@ -878,6 +912,18 @@ static void draw_footer_menu(size_t sel)
 
     text(g_font_small, 48, SCREEN_H - 64, g_diag_error ? kError : kFree, g_diag);
     text(g_font_small, 48, SCREEN_H - 38, kDim, "Desenvolvido por @Kazbonfim2 | CamorraDevs");
+}
+
+// Quadro unico de espera. So da para desenhar depois de init_video: antes dele
+// nao existe renderer, entao a parte do hbloader lendo o .nro do cartao fica
+// fora do nosso alcance -- aquela tela e do hbmenu.
+static void draw_loading(const char *what)
+{
+    SDL_SetRenderDrawColor(g_ren, 20, 22, 28, 255);
+    SDL_RenderClear(g_ren);
+    text(g_font, 48, 36, kWhite, "GameLock " GAMELOCK_VERSION);
+    text_center(g_font, SCREEN_W / 2, SCREEN_H / 2 - 16, kDim, what);
+    SDL_RenderPresent(g_ren);
 }
 
 static void draw(size_t sel, size_t first, Result load_rc, Mode mode, size_t menu_sel)
@@ -1026,6 +1072,9 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // games_load pergunta nome e nacp ao ns titulo a titulo: com biblioteca
+    // grande sao alguns segundos de tela parada se nao avisar.
+    draw_loading("Carregando a lista de jogos...");
     const Result load_rc = games_load(&g_games, &g_count);
     if (R_FAILED(load_rc)) {
         diag_set(true, "games_load (ns): 0x%X", load_rc);
@@ -1035,6 +1084,7 @@ int main(int argc, char **argv)
     // O cartao pode ter ficado dessincronizado (config editada fora, stub
     // sobrando de um jogo desinstalado). Reconcilia na abertura.
     if (!invalid && (g_cfg.locked.count > 0 || g_cfg.blocked.count > 0)) {
+        draw_loading("Conferindo o cartao...");
         apply_blocks("Estado aplicado:");
     }
 
@@ -1085,6 +1135,9 @@ int main(int argc, char **argv)
                 }
                 if (down & HidNpadButton_Y) {
                     action_toggle_authorization(&g_games[sel]);
+                }
+                if ((down & HidNpadButton_B) && action_launch(&g_games[sel])) {
+                    running = false;
                 }
 
                 if (sel < first) {

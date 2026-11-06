@@ -319,17 +319,16 @@ bloqueado e a tela avisa.
 | Nome comprido | instalar/escolher um jogo de nome longo: rola na linha do cursor, trunca nas outras | **OK** |
 | GameLock fora da lista | com o forwarder instalado, ele não deve aparecer | **não executado** |
 | Ícone no hbmenu/forwarder | o cadeado deve aparecer, não o ícone padrão do libnx | **OK** |
-| `B` abre o jogo (modo application) | pelo forwarder, liberar e apertar `B` | **não executado** — 0.9.0 |
-| `B` abre o jogo (modo applet) | pelo Álbum, liberar e apertar `B` | **não executado** — 0.9.0 |
-| `B` recusa jogo bloqueado | apertar `B` sem liberar: deve avisar, não lançar | **não executado** — 0.9.0 |
-| Tela de espera aparece | abrir com biblioteca grande | **não executado** — 0.9.0 |
+| `B` abre o jogo (modo application) | pelo forwarder, liberar e apertar `B` | **OK** |
+| `B` abre o jogo (modo applet) | pelo Álbum, liberar e apertar `B` | **OK** |
+| `B` recusa jogo bloqueado | apertar `B` sem liberar: deve avisar, não lançar | **OK** |
+| Tela de espera aparece | abrir com biblioteca grande | **OK** |
 
-Fluxo principal validado em console pelo autor em 2026-11-06: proteger, bloquear
-de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN e
-teclado próprio. Os `não executado` que restam são casos de borda (SD cheio,
-`config.json` corrompido, conflito com LayeredFS) e o que a 0.9.0 trouxe de
-novo — `B` para abrir o jogo e a tela de espera — que compila limpo mas ainda
-não passou pelo console.
+Validado em console pelo autor em 2026-11-06, 0.8.0 e 0.9.0: proteger, bloquear
+de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN,
+teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera. Os `não
+executado` que restam são casos de borda — SD cheio, `config.json` corrompido,
+conflito com LayeredFS.
 
 ---
 

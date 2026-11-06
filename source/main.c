@@ -31,7 +31,7 @@
 #include "games.h"
 #include "pin.h"
 
-#define GAMELOCK_VERSION "0.8.0"
+#define GAMELOCK_VERSION "0.9.0"
 
 #define SCREEN_W 1280
 #define SCREEN_H 720

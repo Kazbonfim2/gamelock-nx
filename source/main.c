@@ -1,4 +1,4 @@
-// GameLock 1.0.0 - bloqueio efetivo dos jogos protegidos.
+// GameLock 1.0.1 - bloqueio efetivo dos jogos protegidos.
 //
 // Interface, PIN e persistencia, mais o bloqueio real: os jogos marcados
 // ganham stubs de exefs no cartao (ver block.c) e nao sobem mais pelo menu
@@ -37,7 +37,7 @@
 #include "games.h"
 #include "pin.h"
 
-#define GAMELOCK_VERSION "1.0.0"
+#define GAMELOCK_VERSION "1.0.1"
 
 #define SCREEN_W 1280
 #define SCREEN_H 720
@@ -708,7 +708,8 @@ static void action_toggle_authorization(Game *game)
     }
 }
 
-// B: abre o jogo selecionado direto daqui, sem passar pelo HOME.
+// B: abre o jogo selecionado direto daqui, sem passar pelo HOME. Jogo
+// protegido tambem abre: quem passou do portao de PIN e o responsavel.
 //
 // appletRequestLaunchApplication (applet.h:1455) vale em modo application e,
 // desde o FW 5.0.0, tambem em modo applet (AppletType_LibraryApplet) -- que e
@@ -718,17 +719,29 @@ static void action_toggle_authorization(Game *game)
 // GameLock deve sair, para nao ficar um processo pendurado atras do jogo.
 static bool action_launch(const Game *game)
 {
-    if (game->locked && g_cfg.protection_enabled && !game->authorized) {
-        msg_set(true, T("Jogo protegido: libere com Y antes de abrir.",
-                        "Protected game: release it with Y before opening."));
-        return false;
-    }
-
     // O loader le o cartao no momento do launch. Stub sobrando aqui viraria
     // erro do firmware em vez de jogo aberto, entao reconcilia antes de pedir.
     g_msg_error = false;
     apply_blocks(T("Estado aplicado:", "State applied:"));
     if (g_msg_error) {
+        return false;
+    }
+
+    // Jogo protegido sai do bloqueio so para este launch. Exigir Y antes criava
+    // o habito ruim: liberar, jogar, fechar e esquecer o jogo liberado para a
+    // crianca. Aqui nada de autorizacao e gravado -- a posse em Config::blocked
+    // fica como esta, entao a proxima abertura do GameLock reconcilia e o
+    // titulo volta a nao subir pelo HOME, sem ninguem precisar lembrar.
+    //
+    // O preco e a janela entre este launch e a proxima abertura do GameLock:
+    // nela o titulo nao tem stub e sobe pelo HOME. Fechar o stub depois do
+    // pedido nao da -- o sistema assume o foreground e o GameLock morre antes.
+    if (game->locked && g_cfg.protection_enabled && !game->authorized &&
+        !block_release(game->tid)) {
+        msg_set(true, T("Nao foi possivel destravar o jogo para abrir.",
+                        "Could not unlock the game to open it."));
+        diag_set(true, "block_release(%016lX) FALHOU: stub intacto, o jogo nao abriria.",
+                 game->tid);
         return false;
     }
 

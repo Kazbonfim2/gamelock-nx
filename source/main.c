@@ -1,4 +1,4 @@
-// GameLock 1.0.1 - bloqueio efetivo dos jogos protegidos.
+// GameLock 1.0.2 - bloqueio efetivo dos jogos protegidos.
 //
 // Interface, PIN e persistencia, mais o bloqueio real: os jogos marcados
 // ganham stubs de exefs no cartao (ver block.c) e nao sobem mais pelo menu
@@ -37,7 +37,7 @@
 #include "games.h"
 #include "pin.h"
 
-#define GAMELOCK_VERSION "1.0.1"
+#define GAMELOCK_VERSION "1.0.2"
 
 #define SCREEN_W 1280
 #define SCREEN_H 720

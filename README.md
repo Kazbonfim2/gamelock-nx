@@ -337,7 +337,8 @@ já resolve).
 
 O ícone do `.nro` é o `icon.jpg` da raiz (256×256 JPEG, exigência do formato),
 apontado por `ICON` no `Makefile`. O original em alta resolução fica em
-`source/icon.png`.
+`source/icon.png` — trocou na 1.0.2, e o `icon.jpg` é gerado dele por
+redimensionamento direto, sem corte (as duas artes são quadradas).
 
 ### Arquivos
 
@@ -386,27 +387,27 @@ bloqueado e a tela avisa.
 | Ícone no hbmenu/forwarder | o cadeado deve aparecer, não o ícone padrão do libnx | **OK** |
 | `B` abre o jogo (modo application) | pelo forwarder, liberar e apertar `B` | **OK** |
 | `B` abre o jogo (modo applet) | pelo Álbum, liberar e apertar `B` | **OK** |
-| `B` abre jogo **bloqueado** | apertar `B` sem liberar: deve abrir | **não executado** — 1.0.1 |
-| Bloqueio volta sozinho | depois do `B` acima, reabrir o GameLock e conferir o HOME | **não executado** — 1.0.1 |
+| `B` abre jogo **bloqueado** | apertar `B` sem liberar: deve abrir | **OK** |
+| Bloqueio volta sozinho | depois do `B` acima, reabrir o GameLock e conferir o HOME | **OK** |
 | Tela de espera aparece | abrir com biblioteca grande | **OK** |
-| Troca de idioma | alternar em Configurações, sair, reabrir | **não executado** — 1.0.1 |
+| Troca de idioma | alternar em Configurações, sair, reabrir | **OK** |
+| Portão de PIN único | `A`, `Y` e a chave geral devem agir sem pedir teclado | **OK** |
 
 Validado em console pelo autor em 2026-11-06, 0.8.0 e 0.9.0: proteger, bloquear
 de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN,
-teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera. Os `não
-executado` que restam são casos de borda — SD cheio, `config.json` corrompido,
-conflito com LayeredFS.
+teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera.
 
-A 1.0.1 trouxe três coisas: o portão de PIN único (ver *Um portão de PIN só*), a
-troca de idioma, e `B` abrindo jogo bloqueado. O mecanismo de bloqueio e o
-formato gravado não mudaram, então os testes acima continuam valendo; o build
-saiu limpo, 0 avisos.
+Validado em console pelo autor em 2026-11-07, 1.0.1: o portão de PIN único (`A`,
+`Y` e a chave geral agindo direto, sem teclado), a troca de idioma sobrevivendo a
+fechar e reabrir, `B` abrindo jogo bloqueado, e — o que mais importava — reabrir
+o GameLock depois disso repondo o stub, com o jogo voltando a não subir pelo
+HOME. A promessa de que o `B` não deixa rastro está confirmada no hardware.
 
-**Falta console na 1.0.1**: que `A`, `Y` e a chave geral agem direto sem teclado;
-que o idioma escolhido sobrevive a fechar e reabrir; que `B` abre jogo bloqueado;
-e que reabrir o GameLock depois disso repõe o stub e o jogo volta a não subir
-pelo HOME. Esse último é o que mais importa conferir — é a promessa de que o `B`
-não deixa rastro.
+A 1.0.2 troca só a arte do ícone embutido no `.nro`. Nenhuma linha de
+comportamento mudou.
+
+Os `não executado` que restam são casos de borda — SD cheio, `config.json`
+corrompido, jogo reinstalado, conflito com LayeredFS.
 
 ---
 

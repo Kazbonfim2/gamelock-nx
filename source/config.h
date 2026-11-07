@@ -26,6 +26,7 @@ typedef struct {
     u32    iterations;
 
     bool   protection_enabled;
+    u32    lang;         // 0 = portugues, 1 = ingles (textos da interface)
 
     IdList locked;       // Title IDs que o responsavel quer protegidos
     IdList authorized;   // protegidos, porem liberados ate travar de novo

@@ -1,6 +1,8 @@
 # GameLock
 
 **Controle parental por PIN para Nintendo Switch com Atmosphère.**
+*Parental control by PIN for Nintendo Switch with Atmosphère — interface in
+Portuguese and English, switchable in Settings.*
 
 Homebrew `.nro` que deixa o dono do console escolher, jogo a jogo, quais títulos
 só abrem com autorização. Jogo protegido simplesmente **não inicia** pelo menu
@@ -143,8 +145,8 @@ processo atual.
 | Tela | Tecla | Ação |
 |---|---|---|
 | Lista | `↑` `↓` / `ZL` `ZR` | navegar / paginar |
-| Lista | `A` | proteger / desproteger (desproteger pede o PIN) |
-| Lista | `Y` | liberar o jogo protegido (pede o PIN) / travar de novo |
+| Lista | `A` | proteger / desproteger |
+| Lista | `Y` | liberar o jogo protegido / travar de novo |
 | Lista | `B` | abrir o jogo selecionado, sem passar pelo HOME |
 | Lista | `X` | Configurações |
 | Lista | `+` | sair |
@@ -153,6 +155,7 @@ Estados mostrados em cada linha: `livre`, `BLOQUEADO`, `LIBERADO` (protegido mas
 autorizado até travar de novo) e `marcado (proteção off)`.
 
 Com PIN cadastrado, o GameLock pede o PIN **na abertura**: 3 tentativas e fecha.
+Esse é o portão — ver *Um portão de PIN só* abaixo.
 
 **Abrir o jogo daqui (`B`).** Evita o ida-e-volta de liberar, sair e procurar o
 ícone no HOME: libera com `Y`, aperta `B`, o jogo abre. Usa
@@ -170,6 +173,7 @@ do jogo.
 | Cadastrar PIN / Trocar o PIN / Apagar o PIN | define, substitui (pede o atual) ou remove o PIN |
 | Proteção dos jogos marcados: LIGADA/desligada | chave geral; desligada, todos voltam a abrir sem perder as marcações |
 | Travar de volta os N jogos liberados | cancela as liberações feitas com `Y` |
+| Idioma / Language: PORTUGUES/ENGLISH | troca o idioma dos textos; grava no `config.json` |
 | Conferir e corrigir o cartão | compara o cartão com a configuração e corrige o que estiver fora; não muda marcação |
 | Regravar o arquivo de configuração | reescreve o `config.json`; útil só se a gravação automática falhou |
 | Voltar para a lista | fecha as configurações |
@@ -180,10 +184,48 @@ faz — os rótulos sozinhos eram ambíguos entre si.
 
 ### Fluxo de autorização
 
-O responsável digita o PIN e libera o jogo; ele fica liberado **até ser travado
-de novo** (`Y` no jogo, ou *Travar de volta os liberados*). Não há expiração por
+O responsável libera o jogo com `Y`; ele fica liberado **até ser travado de
+novo** (`Y` no jogo, ou *Travar de volta os liberados*). Não há expiração por
 tempo — foi a opção aprovada. A alternativa seria um sysmodule de boot2 que
 retrava a cada boot, descrita como Etapa 4b opcional na análise.
+
+### Um portão de PIN só
+
+O PIN é pedido **na abertura do GameLock** e mais nada — exceto *Trocar o PIN* e
+*Apagar o PIN*, que pedem o atual porque mexem na própria credencial.
+
+Até a 0.9.0, desproteger com `A`, liberar com `Y` e desligar a chave geral
+pediam o PIN de novo. Saiu na 1.0.0: pedir o mesmo segredo a quem acabou de
+digitá-lo não protege nada, e cada um desses efeitos já era alcançável por um
+caminho livre — desligar a chave geral dá no mesmo que desmarcar os jogos um a
+um. Um portão, uma sessão autenticada, duas exceções sobre a senha.
+
+O que isso assume: quem passou do portão é o responsável. Não há expiração de
+sessão, então GameLock deixado aberto é GameLock destravado — feche ao sair.
+
+---
+
+## Idioma
+
+Dois idiomas: **português** e **inglês**. Troca em Configurações (`X`), na linha
+*Idioma / Language* — o rótulo dela aparece sempre nos dois idiomas, porque quem
+cai no idioma errado precisa reconhecer essa linha sem saber ler as outras. A
+escolha vai para o `config.json` (`"lang": 0` português, `1` inglês) e vale na
+próxima abertura.
+
+O padrão é português. `config.json` gravado por versão anterior à 1.0.0 não tem a
+chave `lang` e continua válido — a ausência vale como português.
+
+Na implementação não há tabela de strings nem IDs: um macro `T(pt, en)`
+(`main.c`) devolve um lado ou o outro conforme `g_cfg.lang`, com a tradução
+colada no original. Sem ID, não há como um lado desencontrar o outro — e um
+`grep` acha os dois textos de uma vez. O custo é que todo texto vive no `.c`:
+trocar uma frase recompila. Para dois idiomas num app desse tamanho, é o preço
+mais barato.
+
+As mensagens técnicas que só aparecem no rodapé de Configurações seguem a mesma
+regra, exceto as que são puro nome de API e código de erro
+(`appletRequestLaunchApplication(...): 0x...`) — essas não têm o que traduzir.
 
 ---
 
@@ -238,6 +280,7 @@ teclado próprio, a organização das teclas é nossa e o PIN funciona nos dois 
 {
   "version": 2,
   "protection_enabled": true,
+  "lang": 0,
   "has_pin": true,
   "pin_iterations": 20000,
   "pin_salt": "7b1c…",
@@ -281,7 +324,7 @@ gamelock/
 ├── Makefile          # template oficial do switch-examples + TARGET/APP_* e pkg-config do SDL2
 ├── icon.jpg          # ícone do .nro (256×256)
 └── source/
-    ├── main.c        # UI SDL2, navegação, menu, telas de PIN, orquestração
+    ├── main.c        # UI SDL2, navegação, menu, telas de PIN, textos pt/en, orquestração
     ├── games.c/.h    # ns: lista de títulos, nome e ícone
     ├── pin.c/.h      # PBKDF2-HMAC-SHA256, salt, comparação em tempo constante, KATs
     ├── config.c/.h   # sdmc:/config/GameLock/config.json
@@ -323,12 +366,19 @@ bloqueado e a tela avisa.
 | `B` abre o jogo (modo applet) | pelo Álbum, liberar e apertar `B` | **OK** |
 | `B` recusa jogo bloqueado | apertar `B` sem liberar: deve avisar, não lançar | **OK** |
 | Tela de espera aparece | abrir com biblioteca grande | **OK** |
+| Troca de idioma | alternar em Configurações, sair, reabrir | **não executado** — 1.0.0 |
 
 Validado em console pelo autor em 2026-11-06, 0.8.0 e 0.9.0: proteger, bloquear
 de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN,
 teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera. Os `não
 executado` que restam são casos de borda — SD cheio, `config.json` corrompido,
 conflito com LayeredFS.
+
+A 1.0.0 retirou pedidos de PIN (ver *Um portão de PIN só*) e acrescentou a troca
+de idioma. Nada mudou no bloqueio nem no formato gravado, então os testes acima
+continuam valendo; o build 1.0.0 saiu limpo, 0 avisos. Falta confirmar em console
+que `A`, `Y` e a chave geral agem direto sem teclado, e que o idioma escolhido
+sobrevive a fechar e reabrir.
 
 ---
 

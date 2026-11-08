@@ -46,7 +46,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 TARGET		:=	GameLock
 APP_TITLE	:=	GameLock
 APP_AUTHOR	:=	Kazbonfim
-APP_VERSION	:=	0.9.0
+APP_VERSION	:=	1.0.2
 ICON		:=	icon.jpg
 BUILD		:=	build
 SOURCES		:=	source

@@ -1,6 +1,8 @@
 # GameLock
 
 **Controle parental por PIN para Nintendo Switch com Atmosphère.**
+*Parental control by PIN for Nintendo Switch with Atmosphère — interface in
+Portuguese and English, switchable in Settings.*
 
 Homebrew `.nro` que deixa o dono do console escolher, jogo a jogo, quais títulos
 só abrem com autorização. Jogo protegido simplesmente **não inicia** pelo menu
@@ -37,23 +39,32 @@ No GameLock você marca só os dois últimos com `A`, cadastra um PIN, e pronto.
 Tocar no ícone do Doom no HOME devolve erro do firmware e o jogo não abre.
 Zelda e Animal Crossing seguem abrindo normalmente, sem pedir nada.
 
-### Exemplo 2 — liberar para a sessão de hoje
+### Exemplo 2 — o adulto quer jogar agora
 
-Fim de semana, o adulto quer jogar Mortal Kombat com o filho mais velho junto.
+Fim de semana, o adulto quer jogar Mortal Kombat. Abre o GameLock, digita o PIN
+da abertura, seleciona o jogo e aperta `B`: o jogo abre, mesmo bloqueado. Nada
+fica marcado como liberado, então não há nada para lembrar de desfazer depois —
+na próxima abertura do GameLock o bloqueio é reposto sozinho.
 
-Abre o GameLock, aperta `Y` em cima do jogo, digita o PIN: o título fica
-**LIBERADO**. Abre quantas vezes quiser. Na segunda de manhã, `Y` de novo (ou
-*Travar de volta os liberados* no menu) e ele volta a ficar bloqueado. A
-marcação nunca se perde — liberar não é desmarcar.
+### Exemplo 3 — liberar para a criança jogar sozinha
 
-### Exemplo 3 — férias acabaram
+Caso diferente: o filho mais velho vai jogar sem o adulto por perto.
+
+`Y` em cima do jogo e ele fica **LIBERADO** — abre pelo HOME, quantas vezes
+quiser, até ser travado de novo (`Y` outra vez, ou *Travar de volta os
+liberados* no menu). A marcação nunca se perde: liberar não é desmarcar.
+
+Resumindo os dois botões: **`B` é "eu jogo agora"**, não deixa rastro.
+**`Y` é "liberado para o HOME"**, e fica até você travar.
+
+### Exemplo 4 — férias acabaram
 
 Período de provas: o responsável vai em Configurações e desliga a chave geral
 *Proteção dos jogos marcados*. Todos os marcados voltam a abrir, as marcações
 continuam gravadas. Semana seguinte, religa — tudo volta a valer exatamente como
 estava, sem remarcar jogo por jogo.
 
-### Exemplo 4 — depois do reboot
+### Exemplo 5 — depois do reboot
 
 Criança descobre que basta reiniciar o console. Não basta: o bloqueio é um
 arquivo no cartão SD, lido pelo loader do Atmosphère a cada tentativa de abrir o
@@ -143,9 +154,9 @@ processo atual.
 | Tela | Tecla | Ação |
 |---|---|---|
 | Lista | `↑` `↓` / `ZL` `ZR` | navegar / paginar |
-| Lista | `A` | proteger / desproteger (desproteger pede o PIN) |
-| Lista | `Y` | liberar o jogo protegido (pede o PIN) / travar de novo |
-| Lista | `B` | abrir o jogo selecionado, sem passar pelo HOME |
+| Lista | `A` | proteger / desproteger |
+| Lista | `Y` | liberar o jogo protegido / travar de novo |
+| Lista | `B` | abrir o jogo selecionado, bloqueado ou não, sem passar pelo HOME |
 | Lista | `X` | Configurações |
 | Lista | `+` | sair |
 
@@ -153,15 +164,25 @@ Estados mostrados em cada linha: `livre`, `BLOQUEADO`, `LIBERADO` (protegido mas
 autorizado até travar de novo) e `marcado (proteção off)`.
 
 Com PIN cadastrado, o GameLock pede o PIN **na abertura**: 3 tentativas e fecha.
+Esse é o portão — ver *Um portão de PIN só* abaixo.
 
-**Abrir o jogo daqui (`B`).** Evita o ida-e-volta de liberar, sair e procurar o
-ícone no HOME: libera com `Y`, aperta `B`, o jogo abre. Usa
-`appletRequestLaunchApplication` (`applet.h:1455`), que vale em modo application
-e, desde o FW 5.0.0, também em modo applet — os dois jeitos de abrir o GameLock.
-Jogo ainda bloqueado recusa e avisa para liberar antes; os stubs são
-reconciliados **antes** do pedido, porque o loader lê o cartão no momento do
-launch. Aceito o pedido, o GameLock sai sozinho em vez de ficar pendurado atrás
-do jogo.
+**Abrir o jogo daqui (`B`).** Evita o ida-e-volta de sair do GameLock e procurar
+o ícone no HOME. Usa `appletRequestLaunchApplication` (`applet.h:1455`), que vale
+em modo application e, desde o FW 5.0.0, também em modo applet — os dois jeitos
+de abrir o GameLock. Os stubs são reconciliados **antes** do pedido, porque o
+loader lê o cartão no momento do launch. Aceito o pedido, o GameLock sai sozinho
+em vez de ficar pendurado atrás do jogo.
+
+**Jogo bloqueado também abre com `B`** (desde a 1.0.1). Antes era preciso liberar
+com `Y` primeiro, e isso criava o hábito ruim: liberar, jogar, fechar e esquecer
+o jogo liberado para a criança. Agora quem passou do portão de PIN abre direto,
+e **nada de autorização é gravado** — o `B` não deixa rastro para alguém lembrar
+de desfazer.
+
+Por dentro: o stub do título sai só para este launch e a posse em
+`blocked_titles` fica como está, então a próxima abertura do GameLock reconcilia
+e o jogo volta a não subir pelo HOME. O preço está nas *Limitações conhecidas*:
+entre esse `B` e a próxima abertura do GameLock, o título fica sem stub.
 
 ### Configurações (`X`)
 
@@ -170,6 +191,7 @@ do jogo.
 | Cadastrar PIN / Trocar o PIN / Apagar o PIN | define, substitui (pede o atual) ou remove o PIN |
 | Proteção dos jogos marcados: LIGADA/desligada | chave geral; desligada, todos voltam a abrir sem perder as marcações |
 | Travar de volta os N jogos liberados | cancela as liberações feitas com `Y` |
+| Idioma / Language: PORTUGUES/ENGLISH | troca o idioma dos textos; grava no `config.json` |
 | Conferir e corrigir o cartão | compara o cartão com a configuração e corrige o que estiver fora; não muda marcação |
 | Regravar o arquivo de configuração | reescreve o `config.json`; útil só se a gravação automática falhou |
 | Voltar para a lista | fecha as configurações |
@@ -180,10 +202,52 @@ faz — os rótulos sozinhos eram ambíguos entre si.
 
 ### Fluxo de autorização
 
-O responsável digita o PIN e libera o jogo; ele fica liberado **até ser travado
-de novo** (`Y` no jogo, ou *Travar de volta os liberados*). Não há expiração por
-tempo — foi a opção aprovada. A alternativa seria um sysmodule de boot2 que
-retrava a cada boot, descrita como Etapa 4b opcional na análise.
+Liberar com `Y` serve para **o jogo abrir pelo HOME** — é o caso de deixar a
+criança jogar sozinha. Fica liberado **até ser travado de novo** (`Y` no jogo,
+ou *Travar de volta os liberados*). Não há expiração por tempo — foi a opção
+aprovada. A alternativa seria um sysmodule de boot2 que retrava a cada boot,
+descrita como Etapa 4b opcional na análise.
+
+Para o próprio adulto jogar não é preciso liberar nada: `B` abre direto
+(abaixo).
+
+### Um portão de PIN só
+
+O PIN é pedido **na abertura do GameLock** e mais nada — exceto *Trocar o PIN* e
+*Apagar o PIN*, que pedem o atual porque mexem na própria credencial.
+
+Até a 0.9.0, desproteger com `A`, liberar com `Y` e desligar a chave geral
+pediam o PIN de novo. Saiu na 1.0.1: pedir o mesmo segredo a quem acabou de
+digitá-lo não protege nada, e cada um desses efeitos já era alcançável por um
+caminho livre — desligar a chave geral dá no mesmo que desmarcar os jogos um a
+um. Um portão, uma sessão autenticada, duas exceções sobre a senha.
+
+O que isso assume: quem passou do portão é o responsável. Não há expiração de
+sessão, então GameLock deixado aberto é GameLock destravado — feche ao sair.
+
+---
+
+## Idioma
+
+Dois idiomas: **português** e **inglês**. Troca em Configurações (`X`), na linha
+*Idioma / Language* — o rótulo dela aparece sempre nos dois idiomas, porque quem
+cai no idioma errado precisa reconhecer essa linha sem saber ler as outras. A
+escolha vai para o `config.json` (`"lang": 0` português, `1` inglês) e vale na
+próxima abertura.
+
+O padrão é português. `config.json` gravado por versão anterior à 1.0.1 não tem a
+chave `lang` e continua válido — a ausência vale como português.
+
+Na implementação não há tabela de strings nem IDs: um macro `T(pt, en)`
+(`main.c`) devolve um lado ou o outro conforme `g_cfg.lang`, com a tradução
+colada no original. Sem ID, não há como um lado desencontrar o outro — e um
+`grep` acha os dois textos de uma vez. O custo é que todo texto vive no `.c`:
+trocar uma frase recompila. Para dois idiomas num app desse tamanho, é o preço
+mais barato.
+
+As mensagens técnicas que só aparecem no rodapé de Configurações seguem a mesma
+regra, exceto as que são puro nome de API e código de erro
+(`appletRequestLaunchApplication(...): 0x...`) — essas não têm o que traduzir.
 
 ---
 
@@ -238,6 +302,7 @@ teclado próprio, a organização das teclas é nossa e o PIN funciona nos dois 
 {
   "version": 2,
   "protection_enabled": true,
+  "lang": 0,
   "has_pin": true,
   "pin_iterations": 20000,
   "pin_salt": "7b1c…",
@@ -272,7 +337,8 @@ já resolve).
 
 O ícone do `.nro` é o `icon.jpg` da raiz (256×256 JPEG, exigência do formato),
 apontado por `ICON` no `Makefile`. O original em alta resolução fica em
-`source/icon.png`.
+`source/icon.png` — trocou na 1.0.2, e o `icon.jpg` é gerado dele por
+redimensionamento direto, sem corte (as duas artes são quadradas).
 
 ### Arquivos
 
@@ -281,7 +347,7 @@ gamelock/
 ├── Makefile          # template oficial do switch-examples + TARGET/APP_* e pkg-config do SDL2
 ├── icon.jpg          # ícone do .nro (256×256)
 └── source/
-    ├── main.c        # UI SDL2, navegação, menu, telas de PIN, orquestração
+    ├── main.c        # UI SDL2, navegação, menu, telas de PIN, textos pt/en, orquestração
     ├── games.c/.h    # ns: lista de títulos, nome e ícone
     ├── pin.c/.h      # PBKDF2-HMAC-SHA256, salt, comparação em tempo constante, KATs
     ├── config.c/.h   # sdmc:/config/GameLock/config.json
@@ -321,14 +387,27 @@ bloqueado e a tela avisa.
 | Ícone no hbmenu/forwarder | o cadeado deve aparecer, não o ícone padrão do libnx | **OK** |
 | `B` abre o jogo (modo application) | pelo forwarder, liberar e apertar `B` | **OK** |
 | `B` abre o jogo (modo applet) | pelo Álbum, liberar e apertar `B` | **OK** |
-| `B` recusa jogo bloqueado | apertar `B` sem liberar: deve avisar, não lançar | **OK** |
+| `B` abre jogo **bloqueado** | apertar `B` sem liberar: deve abrir | **OK** |
+| Bloqueio volta sozinho | depois do `B` acima, reabrir o GameLock e conferir o HOME | **OK** |
 | Tela de espera aparece | abrir com biblioteca grande | **OK** |
+| Troca de idioma | alternar em Configurações, sair, reabrir | **OK** |
+| Portão de PIN único | `A`, `Y` e a chave geral devem agir sem pedir teclado | **OK** |
 
 Validado em console pelo autor em 2026-11-06, 0.8.0 e 0.9.0: proteger, bloquear
 de verdade no HOME, liberar com `Y`, travar de volta, sobreviver ao reboot, PIN,
-teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera. Os `não
-executado` que restam são casos de borda — SD cheio, `config.json` corrompido,
-conflito com LayeredFS.
+teclado próprio, `B` abrindo o jogo nos dois modos e a tela de espera.
+
+Validado em console pelo autor em 2026-11-07, 1.0.1: o portão de PIN único (`A`,
+`Y` e a chave geral agindo direto, sem teclado), a troca de idioma sobrevivendo a
+fechar e reabrir, `B` abrindo jogo bloqueado, e — o que mais importava — reabrir
+o GameLock depois disso repondo o stub, com o jogo voltando a não subir pelo
+HOME. A promessa de que o `B` não deixa rastro está confirmada no hardware.
+
+A 1.0.2 troca só a arte do ícone embutido no `.nro`. Nenhuma linha de
+comportamento mudou.
+
+Os `não executado` que restam são casos de borda — SD cheio, `config.json`
+corrompido, jogo reinstalado, conflito com LayeredFS.
 
 ---
 
@@ -336,6 +415,11 @@ conflito com LayeredFS.
 
 - **O bloqueio vale no próximo launch.** Jogo já rodando, ou em suspensão, não é
   afetado até fechar.
+- **Depois de abrir um jogo bloqueado com `B`, ele fica sem stub até a próxima
+  abertura do GameLock** — nessa janela ele sobe pelo HOME. Não há como fechar o
+  stub depois do pedido de launch: o sistema assume o foreground e o processo do
+  GameLock morre antes de poder gravar. Quem quiser o retrave imediato abre o
+  GameLock uma vez ao terminar de jogar, ou usa `Y`/`Y` em vez de `B`.
 - **O HOME mostra erro, não pedido de PIN.** O bloqueio é real, mas a criança vê
   um diálogo de falha do firmware, não um cadeado. Essa é a cara da solução.
 - **Mod de LayeredFS com `exefs` solto no SD vence o stub.** O GameLock detecta e

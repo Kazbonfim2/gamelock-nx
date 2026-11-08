@@ -274,6 +274,13 @@ void config_load(Config *cfg, bool *out_missing, bool *out_invalid)
 
     cfg->protection_enabled = enabled;
 
+    // Chave ausente = portugues: config gravado por versao anterior a 1.0.0
+    // nao tem "lang" e continua valido.
+    u32 lang = 0;
+    if (read_u32(value_of(json, "lang"), &lang) && lang <= 1) {
+        cfg->lang = lang;
+    }
+
     if (has_pin) {
         u32 iterations = 0;
         if (!read_u32(value_of(json, "pin_iterations"), &iterations) || iterations == 0 ||
@@ -331,6 +338,7 @@ bool config_save(const Config *cfg)
     fprintf(f, "  \"version\": %d,\n", CONFIG_VERSION);
     fprintf(f, "  \"protection_enabled\": %s,\n", cfg->protection_enabled ? "true" : "false");
     fprintf(f, "  \"has_pin\": %s,\n", cfg->has_pin ? "true" : "false");
+    fprintf(f, "  \"lang\": %u,\n", cfg->lang);
 
     if (cfg->has_pin) {
         fprintf(f, "  \"pin_iterations\": %u,\n", cfg->iterations);

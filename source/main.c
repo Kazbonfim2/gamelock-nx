@@ -1,8 +1,14 @@
-// GameLock - Etapa 4: bloqueio efetivo dos jogos protegidos.
+// GameLock 1.0.2 - bloqueio efetivo dos jogos protegidos.
 //
-// Interface, PIN e persistencia das etapas anteriores, mais o bloqueio real:
-// os jogos marcados ganham stubs de exefs no cartao (ver block.c) e nao sobem
-// mais pelo menu HOME. Liberar um jogo pede o PIN e remove os stubs.
+// Interface, PIN e persistencia, mais o bloqueio real: os jogos marcados
+// ganham stubs de exefs no cartao (ver block.c) e nao sobem mais pelo menu
+// HOME. Liberar um jogo remove os stubs.
+//
+// Um portao de PIN so: na abertura (ver require_pin no main). Depois dele a
+// sessao esta autenticada e marcar, liberar ou desligar a protecao nao pedem
+// nada de novo -- pediriam o mesmo segredo para quem acabou de digitar, e o
+// mesmo efeito era alcancavel jogo por jogo. Atras do portao sobram dois
+// pedidos de PIN, os que mexem na propria credencial: trocar e apagar.
 //
 // Entrada pelos controles via libnx (pad*, services/hid.h); o SDL2 cuida do
 // video. O teclado numerico do PIN e desenhado aqui, nao e o applet do sistema.
@@ -31,7 +37,7 @@
 #include "games.h"
 #include "pin.h"
 
-#define GAMELOCK_VERSION "0.9.0"
+#define GAMELOCK_VERSION "1.0.2"
 
 #define SCREEN_W 1280
 #define SCREEN_H 720
@@ -76,6 +82,7 @@ typedef enum {
     ITEM_PIN_REMOVE,
     ITEM_PROTECTION,
     ITEM_LOCK_ALL,
+    ITEM_LANG,
     ITEM_APPLY,
     ITEM_SAVE,
     ITEM_BACK,
@@ -114,6 +121,11 @@ static size_t g_count;
 
 static PadState g_pad;
 static bool g_crypto_ok;
+
+// Textos em dois idiomas. A traducao fica colada no original, no lugar de uma
+// tabela com IDs: sem ID nao ha como um lado desencontrar o outro. g_cfg.lang
+// vem do config.json e esta carregado antes de qualquer texto aparecer.
+#define T(pt, en) (g_cfg.lang ? (en) : (pt))
 
 // Duas mensagens separadas de proposito: a tela inicial e vista por quem nao
 // deveria aprender como a protecao funciona, entao detalhe tecnico (caminhos no
@@ -362,12 +374,13 @@ static void draw_keypad(const char *header, size_t len, int row, int col, const 
     }
 
     char hint[96];
-    snprintf(hint, sizeof(hint), "%d a %d digitos", PIN_MIN_DIGITS, PIN_MAX_DIGITS);
+    snprintf(hint, sizeof(hint), T("%d a %d digitos",
+                                   "%d to %d digits"), PIN_MIN_DIGITS, PIN_MAX_DIGITS);
     text_center(g_font_small, SCREEN_W / 2, grid_bottom + 52, kDim, hint);
-    static const Legend keys[] = {
-        { GLYPH_A,    "escolhe"  },
-        { GLYPH_B,    "apaga"    },
-        { GLYPH_PLUS, "cancela"  },
+    const Legend keys[] = {
+        { GLYPH_A,    T("escolhe", "select")  },
+        { GLYPH_B,    T("apaga", "delete")    },
+        { GLYPH_PLUS, T("cancela", "cancel")  },
     };
     draw_legend(SCREEN_W / 2 - 190, grid_bottom + 78, keys, 3);
 
@@ -434,7 +447,8 @@ static bool ask_pin(const char *header, char *out, size_t out_size)
             if (pin_digits_valid(out)) {
                 return true;
             }
-            snprintf(warn, sizeof(warn), "O PIN precisa ter de %d a %d digitos.",
+            snprintf(warn, sizeof(warn), T("O PIN precisa ter de %d a %d digitos.",
+                                           "The PIN must have %d to %d digits."),
                      PIN_MIN_DIGITS, PIN_MAX_DIGITS);
         }
 
@@ -464,7 +478,8 @@ static bool require_pin(const char *header)
             return true;
         }
 
-        msg_set(true, "PIN incorreto. Tentativas restantes: %d", attempt - 1);
+        msg_set(true, T("PIN incorreto. Tentativas restantes: %d",
+                        "Wrong PIN. Attempts left: %d"), attempt - 1);
     }
 
     return false;
@@ -477,8 +492,9 @@ static bool save_config(void)
     if (config_save(&g_cfg)) {
         return true;
     }
-    msg_set(true, "Nao foi possivel gravar no cartao.");
-    diag_set(true, "FALHA ao salvar. O %s anterior foi mantido.", CONFIG_PATH);
+    msg_set(true, T("Nao foi possivel gravar no cartao.", "Could not write to the SD card."));
+    diag_set(true, T("FALHA ao salvar. O %s anterior foi mantido.",
+                     "SAVE FAILED. The previous %s was kept."), CONFIG_PATH);
     return false;
 }
 
@@ -491,26 +507,32 @@ static void apply_blocks(const char *prefix)
     // A lista de posse dos stubs mudou: gravar, senao na proxima abertura o
     // GameLock nao sabe mais quais stubs sao dele.
     if (r.config_changed && !config_save(&g_cfg)) {
-        msg_set(true, "Nao foi possivel gravar no cartao.");
-        diag_set(true, "%s stubs mexidos, mas FALHOU gravar a lista de posse.", prefix);
+        msg_set(true, T("Nao foi possivel gravar no cartao.", "Could not write to the SD card."));
+        diag_set(true, T("%s stubs mexidos, mas FALHOU gravar a lista de posse.",
+                         "%s stubs changed, but FAILED to write the ownership list."), prefix);
         return;
     }
 
     if (r.failures > 0) {
-        msg_set(true, "Algo deu errado ao aplicar no cartao.");
-        diag_set(true, "%s %zu bloqueado(s), %zu liberado(s), %zu FALHA(S) de arquivo no SD.",
+        msg_set(true, T("Algo deu errado ao aplicar no cartao.",
+                        "Something went wrong applying to the SD card."));
+        diag_set(true, T("%s %zu bloqueado(s), %zu liberado(s), %zu FALHA(S) de arquivo no SD.",
+                         "%s %zu blocked, %zu released, %zu FILE FAILURE(S) on the SD."),
                  prefix, r.applied, r.released, r.failures);
         return;
     }
 
     if (r.conflicts > 0) {
-        msg_set(true, "Um dos jogos nao pode ser protegido. Veja Configuracoes.");
-        diag_set(true, "%s %zu bloqueado(s), %zu liberado(s). ATENCAO: %016lX tem exefs solto no SD, o stub nao pega.",
+        msg_set(true, T("Um dos jogos nao pode ser protegido. Veja Configuracoes.",
+                        "One of the games cannot be protected. See Settings."));
+        diag_set(true, T("%s %zu bloqueado(s), %zu liberado(s). ATENCAO: %016lX tem exefs solto no SD, o stub nao pega.",
+                         "%s %zu blocked, %zu released. WARNING: %016lX has a loose exefs on the SD, the stub does not take."),
                  prefix, r.applied, r.released, r.first_conflict);
         return;
     }
 
-    diag_set(false, "%s %zu bloqueado(s), %zu liberado(s).", prefix, r.applied, r.released);
+    diag_set(false, T("%s %zu bloqueado(s), %zu liberado(s).",
+                      "%s %zu blocked, %zu released."), prefix, r.applied, r.released);
 }
 
 static void refresh_flags(void)
@@ -526,17 +548,18 @@ static void refresh_flags(void)
 static void action_pin_create(void)
 {
     if (!g_crypto_ok) {
-        msg_set(true, "Erro interno de seguranca: cadastro de PIN desativado.");
+        msg_set(true, T("Erro interno de seguranca: cadastro de PIN desativado.",
+                        "Internal security error: PIN setup disabled."));
         return;
     }
 
     char first[PIN_MAX_DIGITS + 2];
     char again[PIN_MAX_DIGITS + 2];
 
-    if (!ask_pin("Novo PIN", first, sizeof(first))) {
+    if (!ask_pin(T("Novo PIN", "New PIN"), first, sizeof(first))) {
         return;
     }
-    if (!ask_pin("Repita o novo PIN", again, sizeof(again))) {
+    if (!ask_pin(T("Repita o novo PIN", "Repeat the new PIN"), again, sizeof(again))) {
         memset(first, 0, sizeof(first));
         return;
     }
@@ -544,7 +567,8 @@ static void action_pin_create(void)
     if (strcmp(first, again) != 0) {
         memset(first, 0, sizeof(first));
         memset(again, 0, sizeof(again));
-        msg_set(true, "Os PINs digitados nao sao iguais. Nada foi alterado.");
+        msg_set(true, T("Os PINs digitados nao sao iguais. Nada foi alterado.",
+                        "The PINs do not match. Nothing was changed."));
         return;
     }
 
@@ -553,13 +577,13 @@ static void action_pin_create(void)
     memset(again, 0, sizeof(again));
 
     if (save_config()) {
-        msg_set(false, "PIN cadastrado e salvo.");
+        msg_set(false, T("PIN cadastrado e salvo.", "PIN set and saved."));
     }
 }
 
 static void action_pin_change(void)
 {
-    if (!require_pin("PIN atual")) {
+    if (!require_pin(T("PIN atual", "Current PIN"))) {
         return;
     }
     action_pin_create();
@@ -567,38 +591,47 @@ static void action_pin_change(void)
 
 static void action_pin_remove(void)
 {
-    if (!require_pin("PIN atual")) {
+    if (!require_pin(T("PIN atual", "Current PIN"))) {
         return;
     }
 
     config_clear_pin(&g_cfg);
     if (save_config()) {
-        msg_set(false, "PIN removido. O GameLock abre sem PIN agora.");
+        msg_set(false, T("PIN removido. O GameLock abre sem PIN agora.",
+                         "PIN removed. GameLock now opens without a PIN."));
     }
+}
+
+static void action_toggle_lang(void)
+{
+    g_cfg.lang = g_cfg.lang ? 0 : 1;
+    if (!save_config()) {
+        g_cfg.lang = g_cfg.lang ? 0 : 1;
+        return;
+    }
+    msg_set(false, T("Idioma alterado para portugues.", "Language changed to English."));
 }
 
 static void action_toggle_protection(void)
 {
-    if (!require_pin("PIN para mudar a protecao")) {
-        return;
-    }
-
     g_cfg.protection_enabled = !g_cfg.protection_enabled;
     if (!save_config()) {
         g_cfg.protection_enabled = !g_cfg.protection_enabled;
         return;
     }
 
-    apply_blocks(g_cfg.protection_enabled ? "Protecao ativada:" : "Protecao desativada:");
+    apply_blocks(g_cfg.protection_enabled ? T("Protecao ativada:", "Protection on:")
+                                          : T("Protecao desativada:", "Protection off:"));
     if (!g_msg_error) {
-        msg_set(false, g_cfg.protection_enabled ? "Protecao ativada." : "Protecao desativada.");
+        msg_set(false, g_cfg.protection_enabled ? T("Protecao ativada.", "Protection on.")
+                                                : T("Protecao desativada.", "Protection off."));
     }
 }
 
 static void action_lock_all(void)
 {
     if (g_cfg.authorized.count == 0) {
-        msg_set(false, "Nenhuma autorizacao pendente.");
+        msg_set(false, T("Nenhuma autorizacao pendente.", "No release pending."));
         return;
     }
 
@@ -608,9 +641,10 @@ static void action_lock_all(void)
     }
 
     refresh_flags();
-    apply_blocks("Autorizacoes removidas:");
+    apply_blocks(T("Autorizacoes removidas:", "Releases cleared:"));
     if (!g_msg_error) {
-        msg_set(false, "Todos os jogos protegidos foram travados.");
+        msg_set(false, T("Todos os jogos protegidos foram travados.",
+                         "Every protected game is locked again."));
     }
 }
 
@@ -619,63 +653,63 @@ static void action_toggle_lock(Game *game)
 {
     const bool target = !game->locked;
 
-    if (!target && !require_pin("PIN para desproteger")) {
-        return;
-    }
-
     if (!config_set_locked(&g_cfg, game->tid, target)) {
-        msg_set(true, "Sem memoria para registrar o jogo.");
+        msg_set(true, T("Sem memoria para registrar o jogo.", "Out of memory to record the game."));
         return;
     }
 
     if (!config_save(&g_cfg)) {
         // Reverte para a tela nao mentir sobre o que esta no cartao.
         config_set_locked(&g_cfg, game->tid, !target);
-        msg_set(true, "Nao foi possivel gravar no cartao. A marcacao foi desfeita.");
+        msg_set(true, T("Nao foi possivel gravar no cartao. A marcacao foi desfeita.",
+                        "Could not write to the SD card. The mark was undone."));
         return;
     }
 
     refresh_flags();
-    apply_blocks(target ? "Protegido:" : "Desprotegido:");
+    apply_blocks(target ? T("Protegido:", "Protected:") : T("Desprotegido:", "Unprotected:"));
     if (!g_msg_error) {
-        msg_set(false, "%s: %s", game->name, target ? "protegido" : "liberado para todos");
+        msg_set(false, "%s: %s", game->name, target ? T("protegido", "protected")
+                                                    : T("liberado para todos", "open to everyone"));
     }
 }
 
-// Y: libera um jogo protegido (pede PIN) ou trava de novo.
+// Y: libera um jogo protegido ou trava de novo.
 static void action_toggle_authorization(Game *game)
 {
     if (!game->locked) {
-        msg_set(false, "Esse jogo nao esta protegido: nada a liberar.");
+        msg_set(false, T("Esse jogo nao esta protegido: nada a liberar.",
+                         "This game is not protected: nothing to release."));
         return;
     }
 
     const bool target = !game->authorized;
 
-    if (target && !require_pin("PIN para liberar o jogo")) {
-        return;
-    }
-
     if (!config_set_authorized(&g_cfg, game->tid, target)) {
-        msg_set(true, "Sem memoria para registrar a autorizacao.");
+        msg_set(true, T("Sem memoria para registrar a autorizacao.",
+                        "Out of memory to record the release."));
         return;
     }
 
     if (!config_save(&g_cfg)) {
         config_set_authorized(&g_cfg, game->tid, !target);
-        msg_set(true, "Nao foi possivel gravar no cartao. A liberacao foi desfeita.");
+        msg_set(true, T("Nao foi possivel gravar no cartao. A liberacao foi desfeita.",
+                        "Could not write to the SD card. The release was undone."));
         return;
     }
 
     refresh_flags();
-    apply_blocks(target ? "Liberado ate travar de novo:" : "Travado de novo:");
+    apply_blocks(target ? T("Liberado ate travar de novo:", "Released until locked again:")
+                        : T("Travado de novo:", "Locked again:"));
     if (!g_msg_error) {
         msg_set(false, "%s: %s", game->name,
-                target ? "liberado ate travar de novo" : "travado");
+                target ? T("liberado ate travar de novo", "released until locked again")
+                       : T("travado", "locked"));
     }
 }
 
-// B: abre o jogo selecionado direto daqui, sem passar pelo HOME.
+// B: abre o jogo selecionado direto daqui, sem passar pelo HOME. Jogo
+// protegido tambem abre: quem passou do portao de PIN e o responsavel.
 //
 // appletRequestLaunchApplication (applet.h:1455) vale em modo application e,
 // desde o FW 5.0.0, tambem em modo applet (AppletType_LibraryApplet) -- que e
@@ -685,22 +719,36 @@ static void action_toggle_authorization(Game *game)
 // GameLock deve sair, para nao ficar um processo pendurado atras do jogo.
 static bool action_launch(const Game *game)
 {
-    if (game->locked && g_cfg.protection_enabled && !game->authorized) {
-        msg_set(true, "Jogo protegido: libere com Y antes de abrir.");
-        return false;
-    }
-
     // O loader le o cartao no momento do launch. Stub sobrando aqui viraria
     // erro do firmware em vez de jogo aberto, entao reconcilia antes de pedir.
     g_msg_error = false;
-    apply_blocks("Estado aplicado:");
+    apply_blocks(T("Estado aplicado:", "State applied:"));
     if (g_msg_error) {
+        return false;
+    }
+
+    // Jogo protegido sai do bloqueio so para este launch. Exigir Y antes criava
+    // o habito ruim: liberar, jogar, fechar e esquecer o jogo liberado para a
+    // crianca. Aqui nada de autorizacao e gravado -- a posse em Config::blocked
+    // fica como esta, entao a proxima abertura do GameLock reconcilia e o
+    // titulo volta a nao subir pelo HOME, sem ninguem precisar lembrar.
+    //
+    // O preco e a janela entre este launch e a proxima abertura do GameLock:
+    // nela o titulo nao tem stub e sobe pelo HOME. Fechar o stub depois do
+    // pedido nao da -- o sistema assume o foreground e o GameLock morre antes.
+    if (game->locked && g_cfg.protection_enabled && !game->authorized &&
+        !block_release(game->tid)) {
+        msg_set(true, T("Nao foi possivel destravar o jogo para abrir.",
+                        "Could not unlock the game to open it."));
+        diag_set(true, "block_release(%016lX) FALHOU: stub intacto, o jogo nao abriria.",
+                 game->tid);
         return false;
     }
 
     const Result rc = appletRequestLaunchApplication(game->tid, NULL);
     if (R_FAILED(rc)) {
-        msg_set(true, "Nao foi possivel abrir o jogo por aqui.");
+        msg_set(true, T("Nao foi possivel abrir o jogo por aqui.",
+                        "Could not open the game from here."));
         diag_set(true, "appletRequestLaunchApplication(%016lX): 0x%X", game->tid, rc);
         return false;
     }
@@ -747,18 +795,18 @@ static const char *state_label(const Game *game, SDL_Color *out_color)
 {
     if (!game->locked) {
         *out_color = kDim;
-        return "livre";
+        return T("livre", "free");
     }
     if (game->authorized) {
         *out_color = kFree;
-        return "LIBERADO";
+        return T("LIBERADO", "RELEASED");
     }
     if (!g_cfg.protection_enabled) {
         *out_color = kDim;
-        return "marcado (protecao off)";
+        return T("marcado (protecao off)", "marked (protection off)");
     }
     *out_color = kLocked;
-    return "BLOQUEADO";
+    return T("BLOQUEADO", "BLOCKED");
 }
 
 static void draw_row(const Game *game, int y, bool selected)
@@ -798,6 +846,7 @@ static size_t menu_items(MenuItemId *out)
     }
     out[n++] = ITEM_PROTECTION;
     out[n++] = ITEM_LOCK_ALL;
+    out[n++] = ITEM_LANG;
     out[n++] = ITEM_APPLY;
     out[n++] = ITEM_SAVE;
     out[n++] = ITEM_BACK;
@@ -807,23 +856,32 @@ static size_t menu_items(MenuItemId *out)
 static const char *menu_label(MenuItemId id, char *scratch, size_t scratch_size)
 {
     switch (id) {
-        case ITEM_PIN_CREATE: return "Cadastrar PIN";
-        case ITEM_PIN_CHANGE: return "Trocar o PIN";
-        case ITEM_PIN_REMOVE: return "Apagar o PIN";
+        case ITEM_PIN_CREATE: return T("Cadastrar PIN", "Set a PIN");
+        case ITEM_PIN_CHANGE: return T("Trocar o PIN", "Change the PIN");
+        case ITEM_PIN_REMOVE: return T("Apagar o PIN", "Delete the PIN");
         case ITEM_PROTECTION:
-            snprintf(scratch, scratch_size, "Protecao dos jogos marcados: %s",
-                     g_cfg.protection_enabled ? "LIGADA" : "desligada");
+            snprintf(scratch, scratch_size, T("Protecao dos jogos marcados: %s",
+                                              "Protection for marked games: %s"),
+                     g_cfg.protection_enabled ? T("LIGADA", "ON") : T("desligada", "off"));
             return scratch;
         case ITEM_LOCK_ALL:
             if (g_cfg.authorized.count == 0) {
-                return "Travar de volta os jogos liberados (nenhum agora)";
+                return T("Travar de volta os jogos liberados (nenhum agora)",
+                         "Lock the released games back (none right now)");
             }
-            snprintf(scratch, scratch_size, "Travar de volta os %zu jogo(s) liberado(s)",
+            snprintf(scratch, scratch_size, T("Travar de volta os %zu jogo(s) liberado(s)",
+                                              "Lock back the %zu released game(s)"),
                      g_cfg.authorized.count);
             return scratch;
-        case ITEM_APPLY:      return "Conferir e corrigir o cartao";
-        case ITEM_SAVE:       return "Regravar o arquivo de configuracao";
-        case ITEM_BACK:       return "Voltar para a lista";
+        case ITEM_LANG:
+            // Rotulo sempre nos dois idiomas: quem caiu no idioma errado
+            // precisa reconhecer esta linha sem saber ler as outras.
+            return g_cfg.lang ? "Language / Idioma: ENGLISH"
+                              : "Idioma / Language: PORTUGUES";
+        case ITEM_APPLY:      return T("Conferir e corrigir o cartao", "Check and fix the SD card");
+        case ITEM_SAVE:       return T("Regravar o arquivo de configuracao",
+                                       "Rewrite the configuration file");
+        case ITEM_BACK:       return T("Voltar para a lista", "Back to the list");
     }
     return "?";
 }
@@ -834,21 +892,31 @@ static const char *menu_hint(MenuItemId id)
 {
     switch (id) {
         case ITEM_PIN_CREATE:
-            return "Define o PIN. Depois dele, o GameLock pede o PIN para abrir.";
+            return T("Define o PIN. Depois dele, o GameLock pede o PIN para abrir.",
+                     "Sets the PIN. From then on GameLock asks for it to open.");
         case ITEM_PIN_CHANGE:
-            return "Pede o PIN atual e grava um novo no lugar.";
+            return T("Pede o PIN atual e grava um novo no lugar.",
+                     "Asks for the current PIN and writes a new one in its place.");
         case ITEM_PIN_REMOVE:
-            return "Tira o PIN: o GameLock volta a abrir sem pedir nada.";
+            return T("Tira o PIN: o GameLock volta a abrir sem pedir nada.",
+                     "Drops the PIN: GameLock opens without asking again.");
         case ITEM_PROTECTION:
-            return "Chave geral. Desligada, todos os jogos voltam a abrir, sem perder as marcacoes.";
+            return T("Chave geral. Desligada, todos os jogos voltam a abrir, sem perder as marcacoes.",
+                     "Master switch. Off, every game opens again, without losing the marks.");
         case ITEM_LOCK_ALL:
-            return "Cancela as liberacoes feitas com Y: os jogos marcados voltam a ficar bloqueados.";
+            return T("Cancela as liberacoes feitas com Y: os jogos marcados voltam a ficar bloqueados.",
+                     "Cancels the releases made with Y: marked games go back to blocked.");
+        case ITEM_LANG:
+            return T("Troca o idioma dos textos. Fica salvo no config.json.",
+                     "Switches the interface language. Saved in config.json.");
         case ITEM_APPLY:
-            return "Compara o cartao com esta configuracao e corrige o que estiver fora. Nada muda de marcacao.";
+            return T("Compara o cartao com esta configuracao e corrige o que estiver fora. Nada muda de marcacao.",
+                     "Compares the SD card with this configuration and fixes what is off. No mark changes.");
         case ITEM_SAVE:
-            return "Escreve o config.json de novo. Util so se a gravacao automatica falhou antes.";
+            return T("Escreve o config.json de novo. Util so se a gravacao automatica falhou antes.",
+                     "Writes config.json again. Useful only if the automatic save failed before.");
         case ITEM_BACK:
-            return "Fecha as configuracoes.";
+            return T("Fecha as configuracoes.", "Closes the settings.");
     }
     return "";
 }
@@ -857,15 +925,15 @@ static const char *menu_hint(MenuItemId id)
 // seria pior; sucesso se ve no proprio estado da linha.
 static void draw_footer_list(void)
 {
-    static const Legend list[] = {
-        { GLYPH_UP GLYPH_DOWN, "navegar" },
-        { GLYPH_A,    "proteger"      },
-        { GLYPH_Y,    "liberar"       },
-        { GLYPH_B,    "jogar"         },
+    const Legend list[] = {
+        { GLYPH_UP GLYPH_DOWN, T("navegar", "navigate") },
+        { GLYPH_A,    T("proteger", "protect")      },
+        { GLYPH_Y,    T("liberar", "release")       },
+        { GLYPH_B,    T("jogar", "play")         },
         { GLYPH_ZL,   ""              },
-        { GLYPH_ZR,   "pagina"        },
-        { GLYPH_X,    "configuracoes" },
-        { GLYPH_PLUS, "sair"          },
+        { GLYPH_ZR,   T("pagina", "page")        },
+        { GLYPH_X,    T("configuracoes", "settings") },
+        { GLYPH_PLUS, T("sair", "exit")          },
     };
     draw_legend(48, HINT_Y, list, 8);
 
@@ -888,15 +956,16 @@ static void draw_status_panel(void)
     char line[64];
 
     text_right(g_font_small, x, 36, g_cfg.has_pin ? kFree : kDim,
-               g_cfg.has_pin ? "PIN DEFINIDO" : "PIN NAO DEFINIDO");
+               g_cfg.has_pin ? T("PIN DEFINIDO", "PIN SET") : T("PIN NAO DEFINIDO", "NO PIN SET"));
 
     text_right(g_font_small, x, 62, g_cfg.protection_enabled ? kLocked : kDim,
-               g_cfg.protection_enabled ? "PROTECAO ATIVADA" : "PROTECAO DESATIVADA");
+               g_cfg.protection_enabled ? T("PROTECAO ATIVADA", "PROTECTION ON")
+                                        : T("PROTECAO DESATIVADA", "PROTECTION OFF"));
 
-    snprintf(line, sizeof(line), "MARCADOS: %zu", locked_count);
+    snprintf(line, sizeof(line), T("MARCADOS: %zu", "MARKED: %zu"), locked_count);
     text_right(g_font_small, x, 88, kWhite, line);
 
-    snprintf(line, sizeof(line), "LIBERADOS: %zu", g_cfg.authorized.count);
+    snprintf(line, sizeof(line), T("LIBERADOS: %zu", "RELEASED: %zu"), g_cfg.authorized.count);
     text_right(g_font_small, x, 114, kWhite, line);
 }
 
@@ -905,13 +974,15 @@ static void draw_footer_menu(size_t sel)
 {
     if (sel < g_count) {
         char detail[256];
-        snprintf(detail, sizeof(detail), "Jogo selecionado: %016lX   |   %s",
+        snprintf(detail, sizeof(detail), T("Jogo selecionado: %016lX   |   %s",
+                                           "Selected game: %016lX   |   %s"),
                  g_games[sel].tid, CONFIG_PATH);
         text(g_font_small, 48, SCREEN_H - 92, kDim, detail);
     }
 
     text(g_font_small, 48, SCREEN_H - 64, g_diag_error ? kError : kFree, g_diag);
-    text(g_font_small, 48, SCREEN_H - 38, kDim, "Desenvolvido por @Kazbonfim2 | CamorraDevs");
+    text(g_font_small, 48, SCREEN_H - 38, kDim, T("Desenvolvido por @Kazbonfim2 | CamorraDevs",
+                                                  "Developed by @Kazbonfim2 | CamorraDevs"));
 }
 
 // Quadro unico de espera. So da para desenhar depois de init_video: antes dele
@@ -932,7 +1003,8 @@ static void draw(size_t sel, size_t first, Result load_rc, Mode mode, size_t men
     SDL_RenderClear(g_ren);
 
     char header[160];
-    snprintf(header, sizeof(header), "GameLock %s  -  %zu jogo(s)", GAMELOCK_VERSION, g_count);
+    snprintf(header, sizeof(header), T("GameLock %s  -  %zu jogo(s)",
+                                       "GameLock %s  -  %zu game(s)"), GAMELOCK_VERSION, g_count);
     text(g_font, 48, 36, kWhite, header);
 
     if (mode == MODE_MENU) {
@@ -958,17 +1030,19 @@ static void draw(size_t sel, size_t first, Result load_rc, Mode mode, size_t men
         const int hint_y = MENU_TOP + (int)n * MENU_ROW_H + 24;
         text(g_font_small, 72, hint_y, kFree, menu_hint(items[menu_sel]));
 
-        static const Legend menu[] = {
-            { GLYPH_A, "confirmar" },
-            { GLYPH_B, "voltar"    },
+        const Legend menu[] = {
+            { GLYPH_A, T("confirmar", "confirm") },
+            { GLYPH_B, T("voltar", "back")    },
         };
         draw_legend(48, SCREEN_H - 128, menu, 2);
         draw_footer_menu(sel);
     } else {
         if (R_FAILED(load_rc)) {
-            text(g_font, 48, LIST_TOP, kError, "Nao foi possivel ler a lista de jogos.");
+            text(g_font, 48, LIST_TOP, kError, T("Nao foi possivel ler a lista de jogos.",
+                                                 "Could not read the game list."));
         } else if (g_count == 0) {
-            text(g_font, 48, LIST_TOP, kDim, "Nenhum jogo instalado encontrado.");
+            text(g_font, 48, LIST_TOP, kDim, T("Nenhum jogo instalado encontrado.",
+                                               "No installed game found."));
         } else {
             for (size_t i = 0; i < ROWS_VISIBLE && first + i < g_count; i++) {
                 draw_row(&g_games[first + i], LIST_TOP + (int)i * ROW_H, (first + i) == sel);
@@ -1057,24 +1131,27 @@ int main(int argc, char **argv)
     }
 
     if (invalid) {
-        diag_set(true, "config.json invalido: seguindo sem PIN e sem jogo protegido.");
+        diag_set(true, T("config.json invalido: seguindo sem PIN e sem jogo protegido.",
+                         "invalid config.json: going on with no PIN and no protected game."));
     } else if (missing) {
-        diag_set(false, "Nenhum config.json ainda: sera criado ao salvar.");
+        diag_set(false, T("Nenhum config.json ainda: sera criado ao salvar.",
+                          "No config.json yet: it will be created on save."));
     }
 
     if (!g_crypto_ok) {
-        msg_set(true, "Erro interno de seguranca: funcoes de PIN desativadas.");
+        msg_set(true, T("Erro interno de seguranca: funcoes de PIN desativadas.",
+                        "Internal security error: PIN functions disabled."));
     }
 
     // Porta de entrada: se ha PIN, ninguem mexe na lista sem digitar.
-    if (g_cfg.has_pin && !require_pin("PIN do GameLock")) {
+    if (g_cfg.has_pin && !require_pin(T("PIN do GameLock", "GameLock PIN"))) {
         shutdown_all();
         return 0;
     }
 
     // games_load pergunta nome e nacp ao ns titulo a titulo: com biblioteca
     // grande sao alguns segundos de tela parada se nao avisar.
-    draw_loading("Carregando a lista de jogos...");
+    draw_loading(T("Carregando a lista de jogos...", "Loading the game list..."));
     const Result load_rc = games_load(&g_games, &g_count);
     if (R_FAILED(load_rc)) {
         diag_set(true, "games_load (ns): 0x%X", load_rc);
@@ -1084,8 +1161,8 @@ int main(int argc, char **argv)
     // O cartao pode ter ficado dessincronizado (config editada fora, stub
     // sobrando de um jogo desinstalado). Reconcilia na abertura.
     if (!invalid && (g_cfg.locked.count > 0 || g_cfg.blocked.count > 0)) {
-        draw_loading("Conferindo o cartao...");
-        apply_blocks("Estado aplicado:");
+        draw_loading(T("Conferindo o cartao...", "Checking the SD card..."));
+        apply_blocks(T("Estado aplicado:", "State applied:"));
     }
 
     size_t sel = 0;
@@ -1172,10 +1249,11 @@ int main(int argc, char **argv)
                     case ITEM_PIN_REMOVE: action_pin_remove();        break;
                     case ITEM_PROTECTION: action_toggle_protection(); break;
                     case ITEM_LOCK_ALL:   action_lock_all();          break;
-                    case ITEM_APPLY:      apply_blocks("Reaplicado:"); break;
+                    case ITEM_LANG:       action_toggle_lang();       break;
+                    case ITEM_APPLY:      apply_blocks(T("Reaplicado:", "Reapplied:")); break;
                     case ITEM_SAVE:
                         if (save_config()) {
-                            msg_set(false, "Configuracao salva.");
+                            msg_set(false, T("Configuracao salva.", "Configuration saved."));
                         }
                         break;
                     case ITEM_BACK:       mode = MODE_LIST;           break;

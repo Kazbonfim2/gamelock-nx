@@ -24,10 +24,13 @@
 #include <switch.h>
 
 #include "config.h"
-#include "games.h"
 
 // Cria os stubs do titulo. Idempotente.
 bool block_apply(u64 tid);
+
+// Politica: este titulo deve estar bloqueado agora? Vale para o .nro e para o
+// sysmodule de relock, que precisam concordar sobre isso.
+bool block_should_block(const Config *cfg, u64 tid);
 
 // Remove apenas os arquivos *.stub da lista de NSOs, e tenta remover os
 // diretorios se ficarem vazios. Nunca mexe em romfs, cheats ou exefs do usuario.

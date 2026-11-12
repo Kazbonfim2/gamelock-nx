@@ -56,13 +56,31 @@ static bool touch_empty(const char *path)
     return fclose(f) == 0;
 }
 
+// Program ID do processo atual. Quando o GameLock e aberto pelo forwarder do
+// menu HOME, esse valor e justamente o Title ID do forwarder -- que portanto
+// nunca pode ser bloqueado, ou o usuario se trancaria fora do proprio
+// aplicativo. svc.h:204 (InfoType_ProgramId) e svc.h:11.
+static u64 self_program_id(void)
+{
+    u64 program_id = 0;
+    if (R_FAILED(svcGetInfo(&program_id, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0))) {
+        return 0;
+    }
+    return program_id;
+}
+
 bool block_apply(u64 tid)
 {
     char path[256];
 
     // Trava de seguranca: nunca bloquear o processo em que o GameLock roda (o
     // forwarder do HOME). Isso trancaria o usuario fora do proprio aplicativo.
-    const u64 self_tid = games_self_program_id();
+    //
+    // No sysmodule de relock esta trava compara com o Program ID do proprio
+    // sysmodule, o que nao protege o forwarder. Ali quem protege e outra coisa:
+    // o relock so toca em titulo que ja esta em Config::blocked, e um stub de
+    // forwarder nunca chega a existir -- este return false impediu.
+    const u64 self_tid = self_program_id();
     if (self_tid != 0 && tid == self_tid) {
         return false;
     }
@@ -128,7 +146,7 @@ bool block_has_loose_nso(u64 tid)
     return false;
 }
 
-static bool should_block(const Config *cfg, u64 tid)
+bool block_should_block(const Config *cfg, u64 tid)
 {
     return cfg->protection_enabled &&
            config_is_locked(cfg, tid) &&
@@ -142,7 +160,7 @@ void block_sync(Config *cfg, BlockSyncResult *out)
     // 1) Aplicar nos titulos marcados que devem ficar bloqueados.
     for (size_t i = 0; i < cfg->locked.count; i++) {
         const u64 tid = cfg->locked.ids[i];
-        if (!should_block(cfg, tid)) {
+        if (!block_should_block(cfg, tid)) {
             continue;
         }
 
@@ -169,7 +187,7 @@ void block_sync(Config *cfg, BlockSyncResult *out)
     //    bloqueados. De tras para frente porque a lista encolhe durante o laco.
     for (size_t i = cfg->blocked.count; i > 0; i--) {
         const u64 tid = cfg->blocked.ids[i - 1];
-        if (should_block(cfg, tid)) {
+        if (block_should_block(cfg, tid)) {
             continue;
         }
 

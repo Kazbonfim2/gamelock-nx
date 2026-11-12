@@ -44,19 +44,6 @@ static void fill_name(char *dst, size_t dst_size, u64 tid)
     snprintf(dst, dst_size, "%016lX", tid);
 }
 
-// Program ID do processo em que o GameLock esta rodando. Quando ele e aberto
-// pelo forwarder do menu HOME, esse valor e justamente o Title ID do forwarder --
-// que portanto nunca pode entrar na lista, ou o usuario se trancaria fora do
-// proprio aplicativo. svc.h:204 (InfoType_ProgramId) e svc.h:11.
-u64 games_self_program_id(void)
-{
-    u64 program_id = 0;
-    if (R_FAILED(svcGetInfo(&program_id, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0))) {
-        return 0;
-    }
-    return program_id;
-}
-
 // O proprio GameLock nunca pode ser bloqueado: o responsavel se trancaria fora
 // do unico lugar onde se desbloqueia.
 //

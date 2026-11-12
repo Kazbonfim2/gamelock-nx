@@ -2,3 +2,6 @@ build/
 GameLock.elf
 GameLock.nacp
 *.map
+sysmodule/GameLockRelock.elf
+sysmodule/GameLockRelock.nso
+sysmodule/GameLockRelock.npdm

@@ -5,3 +5,4 @@ GameLock.nacp
 sysmodule/GameLockRelock.elf
 sysmodule/GameLockRelock.nso
 sysmodule/GameLockRelock.npdm
+romfs/

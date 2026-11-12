@@ -15,7 +15,7 @@ static const char *const kNsoNames[] = {
 };
 #define NSO_COUNT (sizeof(kNsoNames) / sizeof(kNsoNames[0]))
 
-#define CONTENTS_ROOT "sdmc:/atmosphere/contents"
+#define CONTENTS_ROOT BLOCK_CONTENTS_ROOT
 
 static void path_title(char *out, size_t size, u64 tid)
 {

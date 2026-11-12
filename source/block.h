@@ -25,6 +25,10 @@
 
 #include "config.h"
 
+// Onde o Atmosphere procura conteudo por Title ID: os stubs dos jogos, e
+// tambem o exefs.nsp do sysmodule de relock (ver relock.h).
+#define BLOCK_CONTENTS_ROOT "sdmc:/atmosphere/contents"
+
 // Cria os stubs do titulo. Idempotente.
 bool block_apply(u64 tid);
 

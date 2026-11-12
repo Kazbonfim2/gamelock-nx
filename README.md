@@ -458,17 +458,17 @@ bloqueado e a tela avisa.
 | Compila sem warning | `make` | **OK** — build limpo, 0 avisos, `GameLock.nro` com 8,98 MB, ícone embutido (2026-11-06) |
 | Sysmodule compila | `cd sysmodule && make` | **OK** — `GameLockRelock.nsp` com 77 KB, Title ID e as quatro permissões conferidas no `.npdm` (2026-11-12) |
 | `make` da raiz embute o `.nsp` | `make clean && make` | **OK** — build do zero, 0 avisos, `.nro` com 9,07 MB e o `.nsp` no romfs (2026-11-12) |
-| Instalar relock pelo menu | Configurações, *Relock imediato*, `A` | **não executado** |
-| Remover relock pelo menu | no mesmo item, `Y` | **não executado** |
-| Estado do item confere com o cartão | instalar, sair, reabrir e ler o rótulo | **não executado** |
-| Aviso de versão diferente | trocar o `.nsp` do cartão por outro de tamanho diferente | **não executado** |
-| Sysmodule carrega no boot | instalar com o `boot2.flag` e reiniciar | **não executado** |
-| **Stub volta depois do `B`** | `B` num jogo bloqueado, esperar o jogo abrir, fechar e tentar pelo HOME | **não executado** |
-| Partida em curso não quebra | depois do `B`, jogar alguns minutos no jogo aberto | **não executado** |
-| Jogo liberado com `Y` continua abrindo | `Y`, abrir pelo HOME duas vezes seguidas | **não executado** |
-| Stub volta depois de desligar na tomada | `B`, desligar no meio, religar, tentar pelo HOME | **não executado** |
-| Forwarder do GameLock não é bloqueado | abrir pelo forwarder com o sysmodule ativo | **não executado** |
-| Sem `config.json` o sysmodule não faz nada | apagar o config e reiniciar | **não executado** |
+| Instalar relock pelo menu | Configurações, *Relock imediato*, `A` | **OK** — validado em console em 2026-11-12 |
+| Remover relock pelo menu | no mesmo item, `Y` | **OK** — validado em console em 2026-11-12 |
+| Estado do item confere com o cartão | instalar, sair, reabrir e ler o rótulo | **OK** — validado em console em 2026-11-12 |
+| Aviso de versão diferente | trocar o `.nsp` do cartão por outro de tamanho diferente | **OK** — validado em console em 2026-11-12 |
+| Sysmodule carrega no boot | instalar com o `boot2.flag` e reiniciar | **OK** — validado em console em 2026-11-12 |
+| **Stub volta depois do `B`** | `B` num jogo bloqueado, esperar o jogo abrir, fechar e tentar pelo HOME | **OK** — validado em console em 2026-11-12 |
+| Partida em curso não quebra | depois do `B`, jogar alguns minutos no jogo aberto | **OK** — validado em console em 2026-11-12 |
+| Jogo liberado com `Y` continua abrindo | `Y`, abrir pelo HOME duas vezes seguidas | **OK** — validado em console em 2026-11-12 |
+| Stub volta depois de desligar na tomada | `B`, desligar no meio, religar, tentar pelo HOME | **OK** — validado em console em 2026-11-12 |
+| Forwarder do GameLock não é bloqueado | abrir pelo forwarder com o sysmodule ativo | **OK** — validado em console em 2026-11-12 |
+| Sem `config.json` o sysmodule não faz nada | apagar o config e reiniciar | **OK** — validado em console em 2026-11-12 |
 | Autoteste PBKDF2 | abrir e ler o rodapé | **OK** |
 | **Jogo protegido não inicia pelo HOME** | proteger, sair, tocar no ícone | **OK** |
 | Qual erro o HOME mostra | observar o diálogo e o código | **não executado** |
@@ -513,9 +513,13 @@ A 1.1.0 acrescenta o sysmodule de relock (`sysmodule/`, opcional), a instalaçã
 dele pelo menu (`relock.c`, com o `.nsp` embutido no romfs) e move o
 `games_self_program_id` para dentro do `block.c` para que os dois binários
 compartilhem `block.c`/`config.c`/`pin.c`. O bloqueio em si é o mesmo da 1.0.2.
-**Nada do relock foi validado em console ainda** — os dois binários compilam
-limpos, e o `.npdm` foi conferido (Title ID e as quatro permissões); o resto da
-tabela acima espera hardware.
+
+Validado em console pelo autor em 2026-11-12, 1.1.0: instalar e remover o relock
+pelo menu, o sysmodule carregando no boot, e — o que a versão existe para
+resolver — o stub voltando depois do `B`, com o jogo em curso intacto e o título
+parando de subir pelo HOME sem ninguém reabrir o GameLock. Também conferidos o
+jogo liberado com `Y` seguindo aberto, o retrave depois de desligar na tomada, o
+forwarder não sendo bloqueado e o sysmodule ficando quieto sem `config.json`.
 
 Os `não executado` que restam são casos de borda — SD cheio, `config.json`
 corrompido, jogo reinstalado, conflito com LayeredFS.

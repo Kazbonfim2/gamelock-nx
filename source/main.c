@@ -1,4 +1,4 @@
-// GameLock 1.0.2 - bloqueio efetivo dos jogos protegidos.
+// GameLock 1.1.0 - bloqueio efetivo dos jogos protegidos.
 //
 // Interface, PIN e persistencia, mais o bloqueio real: os jogos marcados
 // ganham stubs de exefs no cartao (ver block.c) e nao sobem mais pelo menu
@@ -36,8 +36,9 @@
 #include "config.h"
 #include "games.h"
 #include "pin.h"
+#include "relock.h"
 
-#define GAMELOCK_VERSION "1.0.2"
+#define GAMELOCK_VERSION "1.1.0"
 
 #define SCREEN_W 1280
 #define SCREEN_H 720
@@ -82,6 +83,7 @@ typedef enum {
     ITEM_PIN_REMOVE,
     ITEM_PROTECTION,
     ITEM_LOCK_ALL,
+    ITEM_RELOCK,
     ITEM_LANG,
     ITEM_APPLY,
     ITEM_SAVE,
@@ -708,6 +710,41 @@ static void action_toggle_authorization(Game *game)
     }
 }
 
+// Instalar/remover o sysmodule de relock -- so move arquivos no cartao para o
+// proximo boot. Nada aqui carrega ou descarrega o sysmodule em memoria: quem
+// faz isso e o Atmosphere, no boot, e por isso toda mensagem fala de reiniciar.
+static void action_relock_install(void)
+{
+    if (!relock_install()) {
+        msg_set(true, T("Nao foi possivel instalar o relock no cartao.",
+                        "Could not install the relock on the SD card."));
+        diag_set(true, T("relock_install() FALHOU em %s/%s.",
+                         "relock_install() FAILED at %s/%s."),
+                 BLOCK_CONTENTS_ROOT, RELOCK_TID);
+        return;
+    }
+
+    msg_set(false, T("Relock instalado. Reinicie o console para valer.",
+                     "Relock installed. Restart the console for it to take effect."));
+    diag_set(false, T("exefs.nsp e flags/boot2.flag gravados em %s/%s.",
+                      "exefs.nsp and flags/boot2.flag written to %s/%s."),
+             BLOCK_CONTENTS_ROOT, RELOCK_TID);
+}
+
+static void action_relock_uninstall(void)
+{
+    if (!relock_uninstall()) {
+        msg_set(true, T("Nao foi possivel remover o relock do cartao.",
+                        "Could not remove the relock from the SD card."));
+        return;
+    }
+
+    msg_set(false, T("Relock removido. Vale no proximo boot do console.",
+                     "Relock removed. Takes effect on the next console boot."));
+    diag_set(false, T("Enquanto nao reiniciar, o sysmodule em memoria segue repondo stub.",
+                      "Until a restart, the sysmodule in memory keeps restoring stubs."));
+}
+
 // B: abre o jogo selecionado direto daqui, sem passar pelo HOME. Jogo
 // protegido tambem abre: quem passou do portao de PIN e o responsavel.
 //
@@ -846,6 +883,9 @@ static size_t menu_items(MenuItemId *out)
     }
     out[n++] = ITEM_PROTECTION;
     out[n++] = ITEM_LOCK_ALL;
+    if (relock_embedded()) {
+        out[n++] = ITEM_RELOCK;
+    }
     out[n++] = ITEM_LANG;
     out[n++] = ITEM_APPLY;
     out[n++] = ITEM_SAVE;
@@ -873,6 +913,20 @@ static const char *menu_label(MenuItemId id, char *scratch, size_t scratch_size)
                                               "Lock back the %zu released game(s)"),
                      g_cfg.authorized.count);
             return scratch;
+        case ITEM_RELOCK:
+            switch (relock_state()) {
+                case RELOCK_READY:
+                    return relock_up_to_date()
+                        ? T("Relock imediato: INSTALADO", "Immediate relock: INSTALLED")
+                        : T("Relock imediato: INSTALADO (versao diferente desta)",
+                            "Immediate relock: INSTALLED (different version than this one)");
+                case RELOCK_PARTIAL:
+                    return T("Relock imediato: instalacao incompleta",
+                             "Immediate relock: incomplete install");
+                case RELOCK_ABSENT:
+                    break;
+            }
+            return T("Relock imediato: nao instalado", "Immediate relock: not installed");
         case ITEM_LANG:
             // Rotulo sempre nos dois idiomas: quem caiu no idioma errado
             // precisa reconhecer esta linha sem saber ler as outras.
@@ -906,6 +960,13 @@ static const char *menu_hint(MenuItemId id)
         case ITEM_LOCK_ALL:
             return T("Cancela as liberacoes feitas com Y: os jogos marcados voltam a ficar bloqueados.",
                      "Cancels the releases made with Y: marked games go back to blocked.");
+        case ITEM_RELOCK:
+            if (relock_state() == RELOCK_READY) {
+                return T("A reinstala, " GLYPH_Y " remove. Vale no proximo boot do console.",
+                         "A reinstalls, " GLYPH_Y " removes. Takes effect on the next console boot.");
+            }
+            return T("A instala o sysmodule que repoe o bloqueio sozinho depois do " GLYPH_B ". Exige reiniciar.",
+                     "A installs the sysmodule that restores the block by itself after " GLYPH_B ". Needs a reboot.");
         case ITEM_LANG:
             return T("Troca o idioma dos textos. Fica salvo no config.json.",
                      "Switches the interface language. Saved in config.json.");
@@ -1104,6 +1165,7 @@ static void shutdown_all(void)
     TTF_Quit();
     SDL_Quit();
 
+    romfsExit();
     nsExit();
     plExit();
 }
@@ -1112,6 +1174,10 @@ int main(int argc, char **argv)
 {
     plInitialize(PlServiceType_User);
     nsInitialize();
+
+    // romfs deste proprio .nro: traz o exefs.nsp do sysmodule de relock. Falhar
+    // aqui nao e fatal -- apenas esconde o item de instalacao no menu.
+    romfsInit();
 
     g_crypto_ok = pin_selftest();
 
@@ -1242,6 +1308,13 @@ int main(int argc, char **argv)
             if (down & HidNpadButton_B) {
                 mode = MODE_LIST;
             }
+            // Y so tem efeito no item do relock, e so com ele instalado: A
+            // instala ou reinstala, Y remove. Um botao para cada sentido evita
+            // um A que as vezes instala e as vezes apaga.
+            if ((down & HidNpadButton_Y) && items[menu_sel] == ITEM_RELOCK &&
+                relock_state() != RELOCK_ABSENT) {
+                action_relock_uninstall();
+            }
             if (down & HidNpadButton_A) {
                 switch (items[menu_sel]) {
                     case ITEM_PIN_CREATE: action_pin_create();        break;
@@ -1249,6 +1322,7 @@ int main(int argc, char **argv)
                     case ITEM_PIN_REMOVE: action_pin_remove();        break;
                     case ITEM_PROTECTION: action_toggle_protection(); break;
                     case ITEM_LOCK_ALL:   action_lock_all();          break;
+                    case ITEM_RELOCK:     action_relock_install();    break;
                     case ITEM_LANG:       action_toggle_lang();       break;
                     case ITEM_APPLY:      apply_blocks(T("Reaplicado:", "Reapplied:")); break;
                     case ITEM_SAVE:

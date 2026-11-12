@@ -20,9 +20,6 @@ typedef struct {
     void *icon_tex;        // SDL_Texture*, carregado sob demanda pela UI
 } Game;
 
-// Program ID do processo atual. 0 se nao foi possivel obter.
-u64 games_self_program_id(void);
-
 // true se este registro e o proprio GameLock (ou seu forwarder): nome contendo
 // "game" e "lock". Nunca entra na lista, nunca pode ser bloqueado.
 bool games_is_self(const Game *game);

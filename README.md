@@ -44,7 +44,13 @@ Zelda e Animal Crossing seguem abrindo normalmente, sem pedir nada.
 Fim de semana, o adulto quer jogar Mortal Kombat. Abre o GameLock, digita o PIN
 da abertura, seleciona o jogo e aperta `B`: o jogo abre, mesmo bloqueado. Nada
 fica marcado como liberado, então não há nada para lembrar de desfazer depois —
-na próxima abertura do GameLock o bloqueio é reposto sozinho.
+o bloqueio é reposto sozinho.
+
+Abrir o jogo exige apagar os `.stub`, e o `.nro` morre junto com o pedido de
+launch, sem poder recriá-los. Com o **sysmodule de relock** instalado (opcional,
+[abaixo](#relock-imediato-sysmodule-opcional)) o stub volta cerca de um segundo
+depois, com o jogo já rodando. Sem ele, o jogo fica solto no HOME até a próxima
+abertura do GameLock.
 
 ### Exemplo 3 — liberar para a criança jogar sozinha
 
@@ -97,10 +103,15 @@ Stubbing*) e implementado em `libstratosphere/source/fs/fs_code.cpp:294-332`
 (`IsFileStubbed` / `DoOpenFile`). A verificação do stub **não** depende da
 combinação de botões de content redirection.
 
-Sem sysmodule, sem IPC, sem MITM, sem alterar NAND, saves ou arquivos do sistema.
-A comparação com os outros três mecanismos possíveis, e a justificativa da
-escolha, está em [`docs/ANALISE-VIABILIDADE.md`](docs/ANALISE-VIABILIDADE.md) —
-toda API citada lá tem arquivo e linha do código-fonte real.
+O bloqueio em si é só isso: sem IPC, sem MITM, sem alterar NAND, saves ou
+arquivos do sistema. A comparação com os outros três mecanismos possíveis, e a
+justificativa da escolha, está em
+[`docs/ANALISE-VIABILIDADE.md`](docs/ANALISE-VIABILIDADE.md) — toda API citada lá
+tem arquivo e linha do código-fonte real.
+
+O sysmodule de relock é um acessório **opcional** dessa arquitetura, não parte do
+bloqueio: ele só reescreve stub que o `.nro` já tinha criado. Nada do que está
+acima depende dele.
 
 **Posse.** O GameLock só apaga `.stub` de Title ID que ele mesmo registrou em
 `blocked_titles`. Stub que você tenha colocado à mão por outro motivo nunca é
@@ -117,6 +128,64 @@ intactos (a remoção dos diretórios usa `rmdir`, que falha se houver algo dent
 
 O PIN usa um teclado numérico próprio, então funciona tanto em modo applet
 (hbmenu pelo Álbum) quanto em modo application (hbmenu com **R**).
+
+### Relock imediato (sysmodule, opcional)
+
+Fecha a janela do `B`: depois de abrir um jogo bloqueado por aqui, o stub volta
+sozinho, sem ninguém precisar reabrir o GameLock.
+
+**Pelo menu (recomendado).** O sysmodule vem embutido no `.nro`. Em Configurações
+(`X`), no item *Relock imediato*: `A` instala ou reinstala, `Y` remove. Depois
+**reinicie o console** — isso não tem como contornar, quem carrega o sysmodule é
+o Atmosphère no boot, e quando o GameLock abre essa decisão já foi tomada.
+
+O item mostra o estado: `não instalado`, `INSTALADO`, `INSTALADO (versão
+diferente desta)` — esse último é o aviso de que você atualizou o `.nro` e o
+cartão ficou com o sysmodule antigo; `A` resolve. Se o `.nro` tiver sido montado
+sem romfs, o item não aparece.
+
+**À mão**, se preferir mexer no cartão pelo PC:
+
+```text
+sdmc:/atmosphere/contents/0100000000474C4B/exefs.nsp    <- GameLockRelock.nsp
+sdmc:/atmosphere/contents/0100000000474C4B/flags/boot2.flag   <- arquivo vazio
+```
+
+Reiniciar o console. O `boot2.flag` é o que faz o Atmosphère carregar o
+sysmodule no boot (`cfg_flags.board.nintendo_nx.inc:84`). O nome da pasta tem que
+ser igual ao `title_id` do `sysmodule/GameLockRelock.json`: o loader usa a pasta
+para achar o `exefs.nsp` e depois confere o program id declarado no npdm.
+
+**O que ele faz.** Dois gatilhos, e nada além disso:
+
+- **no boot**, repõe o stub de tudo que deveria estar bloqueado — cobre desligar
+  o console no meio da brincadeira;
+- **quando uma aplicação entra em foreground**, repõe o stub *desse* título.
+
+O segundo gatilho é seguro porque chega atrasado de propósito: o loader lê o
+cartão durante a criação do processo, e `pm:dmnt` só reporta um pid depois que o
+processo existe. Quando o stub volta, os NSOs do jogo já estão carregados — a
+partida em curso não é afetada, o stub vale para o próximo launch. O custo é um
+poll de um segundo no core 3.
+
+**O que ele não faz.** Não cria stub novo, não escreve no `config.json`, não
+bloqueia launch nenhum. Só reaplica em título que já está em `blocked_titles`,
+isto é, stub que o `.nro` criou e que o `.nro` sabe remover — então desmarcar um
+jogo nunca deixa stub órfão, e não há corrida de escrita com a interface.
+
+Também **não** usa `pmdmntHookToCreateApplicationProcess`, que seguraria a
+criação do processo e permitiria bloquear na hora: é recurso de dono único,
+disputado com o `dmnt` do Atmosphère, e um sysmodule que esqueça de liberar o
+hook trava o console em qualquer jogo.
+
+Permissões no `sysmodule/GameLockRelock.json`: `fsp-srv` (cartão), `pm:dmnt` +
+`pm:info` (qual aplicação está em foreground e qual o Title ID dela) e `set:sys`
+(versão de firmware, que decide o command id das chamadas de `pm`). Mais nada.
+
+Desinstalar é o `Y` no item do menu, ou apagar a pasta `0100000000474C4B` à mão,
+e reiniciar — o GameLock volta a funcionar como antes, com a janela do `B` de
+volta. Enquanto não reiniciar, o sysmodule já carregado em memória continua
+repondo stub; a remoção só vale do próximo boot em diante.
 
 ### Ícone no menu HOME (forwarder)
 
@@ -335,6 +404,16 @@ cd gamelock && make        # saída: GameLock.nro
 `DEVKITPRO` precisa estar no ambiente (abrir pelo `msys2_shell.cmd` do devkitPro
 já resolve).
 
+O `make` da raiz **já compila o sysmodule** e embute o `.nsp` no romfs do `.nro`
+(é assim que o menu consegue instalá-lo). Para mexer só no sysmodule:
+
+```sh
+cd gamelock/sysmodule && make   # saída: GameLockRelock.nsp
+```
+
+O `.nro` ficou ~90 KB maior por causa do `.nsp` embutido. `make clean` na raiz
+limpa os dois e apaga o `romfs/`.
+
 O ícone do `.nro` é o `icon.jpg` da raiz (256×256 JPEG, exigência do formato),
 apontado por `ICON` no `Makefile`. O original em alta resolução fica em
 `source/icon.png` — trocou na 1.0.2, e o `icon.jpg` é gerado dele por
@@ -346,13 +425,24 @@ redimensionamento direto, sem corte (as duas artes são quadradas).
 gamelock/
 ├── Makefile          # template oficial do switch-examples + TARGET/APP_* e pkg-config do SDL2
 ├── icon.jpg          # ícone do .nro (256×256)
-└── source/
-    ├── main.c        # UI SDL2, navegação, menu, telas de PIN, textos pt/en, orquestração
-    ├── games.c/.h    # ns: lista de títulos, nome e ícone
-    ├── pin.c/.h      # PBKDF2-HMAC-SHA256, salt, comparação em tempo constante, KATs
-    ├── config.c/.h   # sdmc:/config/GameLock/config.json
-    └── block.c/.h    # stubs de exefs: aplicar, liberar, reconciliar
+├── source/
+│   ├── main.c        # UI SDL2, navegação, menu, telas de PIN, textos pt/en, orquestração
+│   ├── games.c/.h    # ns: lista de títulos, nome e ícone
+│   ├── pin.c/.h      # PBKDF2-HMAC-SHA256, salt, comparação em tempo constante, KATs
+│   ├── config.c/.h   # sdmc:/config/GameLock/config.json
+│   ├── block.c/.h    # stubs de exefs: aplicar, liberar, reconciliar, política
+│   └── relock.c/.h   # instalar/remover o sysmodule no cartão (romfs -> contents)
+├── romfs/            # gerado pelo make: só o exefs.nsp do sysmodule, fora do git
+└── sysmodule/        # relock opcional (Etapa 4b)
+    ├── Makefile      # template oficial de sysmodule + os fontes compartilhados
+    ├── GameLockRelock.json   # npdm: Title ID e as quatro permissões
+    └── source/main.c # boot + pm:dmnt, chama block_apply
 ```
+
+O sysmodule **compila os mesmos** `block.c`, `config.c` e `pin.c` do `.nro`
+(`SHARED_CFILES` no `sysmodule/Makefile`), sem cópia: a lista de NSOs e o formato
+do `config.json` existem numa única implementação. Por isso `block.h` não depende
+mais de `games.h` — o sysmodule não tem o que fazer com `ns`.
 
 ---
 
@@ -366,6 +456,19 @@ bloqueado e a tela avisa.
 | Teste | Como | Status |
 |---|---|---|
 | Compila sem warning | `make` | **OK** — build limpo, 0 avisos, `GameLock.nro` com 8,98 MB, ícone embutido (2026-11-06) |
+| Sysmodule compila | `cd sysmodule && make` | **OK** — `GameLockRelock.nsp` com 77 KB, Title ID e as quatro permissões conferidas no `.npdm` (2026-11-12) |
+| `make` da raiz embute o `.nsp` | `make clean && make` | **OK** — build do zero, 0 avisos, `.nro` com 9,07 MB e o `.nsp` no romfs (2026-11-12) |
+| Instalar relock pelo menu | Configurações, *Relock imediato*, `A` | **OK** — validado em console em 2026-11-12 |
+| Remover relock pelo menu | no mesmo item, `Y` | **OK** — validado em console em 2026-11-12 |
+| Estado do item confere com o cartão | instalar, sair, reabrir e ler o rótulo | **OK** — validado em console em 2026-11-12 |
+| Aviso de versão diferente | trocar o `.nsp` do cartão por outro de tamanho diferente | **OK** — validado em console em 2026-11-12 |
+| Sysmodule carrega no boot | instalar com o `boot2.flag` e reiniciar | **OK** — validado em console em 2026-11-12 |
+| **Stub volta depois do `B`** | `B` num jogo bloqueado, esperar o jogo abrir, fechar e tentar pelo HOME | **OK** — validado em console em 2026-11-12 |
+| Partida em curso não quebra | depois do `B`, jogar alguns minutos no jogo aberto | **OK** — validado em console em 2026-11-12 |
+| Jogo liberado com `Y` continua abrindo | `Y`, abrir pelo HOME duas vezes seguidas | **OK** — validado em console em 2026-11-12 |
+| Stub volta depois de desligar na tomada | `B`, desligar no meio, religar, tentar pelo HOME | **OK** — validado em console em 2026-11-12 |
+| Forwarder do GameLock não é bloqueado | abrir pelo forwarder com o sysmodule ativo | **OK** — validado em console em 2026-11-12 |
+| Sem `config.json` o sysmodule não faz nada | apagar o config e reiniciar | **OK** — validado em console em 2026-11-12 |
 | Autoteste PBKDF2 | abrir e ler o rodapé | **OK** |
 | **Jogo protegido não inicia pelo HOME** | proteger, sair, tocar no ícone | **OK** |
 | Qual erro o HOME mostra | observar o diálogo e o código | **não executado** |
@@ -406,6 +509,18 @@ HOME. A promessa de que o `B` não deixa rastro está confirmada no hardware.
 A 1.0.2 troca só a arte do ícone embutido no `.nro`. Nenhuma linha de
 comportamento mudou.
 
+A 1.1.0 acrescenta o sysmodule de relock (`sysmodule/`, opcional), a instalação
+dele pelo menu (`relock.c`, com o `.nsp` embutido no romfs) e move o
+`games_self_program_id` para dentro do `block.c` para que os dois binários
+compartilhem `block.c`/`config.c`/`pin.c`. O bloqueio em si é o mesmo da 1.0.2.
+
+Validado em console pelo autor em 2026-11-12, 1.1.0: instalar e remover o relock
+pelo menu, o sysmodule carregando no boot, e — o que a versão existe para
+resolver — o stub voltando depois do `B`, com o jogo em curso intacto e o título
+parando de subir pelo HOME sem ninguém reabrir o GameLock. Também conferidos o
+jogo liberado com `Y` seguindo aberto, o retrave depois de desligar na tomada, o
+forwarder não sendo bloqueado e o sysmodule ficando quieto sem `config.json`.
+
 Os `não executado` que restam são casos de borda — SD cheio, `config.json`
 corrompido, jogo reinstalado, conflito com LayeredFS.
 
@@ -416,10 +531,16 @@ corrompido, jogo reinstalado, conflito com LayeredFS.
 - **O bloqueio vale no próximo launch.** Jogo já rodando, ou em suspensão, não é
   afetado até fechar.
 - **Depois de abrir um jogo bloqueado com `B`, ele fica sem stub até a próxima
-  abertura do GameLock** — nessa janela ele sobe pelo HOME. Não há como fechar o
-  stub depois do pedido de launch: o sistema assume o foreground e o processo do
-  GameLock morre antes de poder gravar. Quem quiser o retrave imediato abre o
-  GameLock uma vez ao terminar de jogar, ou usa `Y`/`Y` em vez de `B`.
+  abertura do GameLock** — nessa janela ele sobe pelo HOME. O `.nro` não tem como
+  fechar o stub depois do pedido de launch: o sistema assume o foreground e o
+  processo morre antes de poder gravar. Isso é o que o
+  [sysmodule de relock](#relock-imediato-sysmodule-opcional) resolve, reduzindo a
+  janela a cerca de um segundo **com o jogo já em foreground** — na prática,
+  ninguém está no HOME nesse instante. Sem o sysmodule, o retrave é abrir o
+  GameLock uma vez ao terminar de jogar, ou usar `Y`/`Y` em vez de `B`.
+- **O relock reage a uma aplicação em foreground, não ao fim da partida.** Se o
+  jogo cair direto para o HOME sem nunca ter criado processo (erro de launch, por
+  exemplo), não há gatilho — o stub volta no próximo boot.
 - **O HOME mostra erro, não pedido de PIN.** O bloqueio é real, mas a criança vê
   um diálogo de falha do firmware, não um cadeado. Essa é a cara da solução.
 - **Mod de LayeredFS com `exefs` solto no SD vence o stub.** O GameLock detecta e

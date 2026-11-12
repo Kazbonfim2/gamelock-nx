@@ -46,13 +46,18 @@ include $(DEVKITPRO)/libnx/switch_rules
 TARGET		:=	GameLock
 APP_TITLE	:=	GameLock
 APP_AUTHOR	:=	Kazbonfim
-APP_VERSION	:=	1.0.2
+APP_VERSION	:=	1.1.0
 ICON		:=	icon.jpg
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-#ROMFS	:=	romfs
+# O romfs existe por um motivo so: levar o exefs.nsp do sysmodule de relock
+# dentro do .nro, para o menu poder instala-lo no cartao (ver relock.c). O
+# arquivo e gerado pelo alvo romfs/GameLockRelock.nsp mais abaixo, nao entra no
+# git -- a fonte da verdade e sysmodule/.
+ROMFS	:=	romfs
+RELOCK_NSP	:=	romfs/GameLockRelock.nsp
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -164,18 +169,29 @@ ifneq ($(ROMFS),)
 	export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: $(BUILD) clean all
+.PHONY: $(BUILD) clean all sysmodule
 
 #---------------------------------------------------------------------------------
 all: $(BUILD)
 
-$(BUILD):
+$(BUILD): $(RELOCK_NSP)
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+
+# O sysmodule e compilado pelo Makefile dele (incremental) e copiado para o
+# romfs. cp -u para o .nro nao relinkar 9 MB quando o nsp nao mudou.
+sysmodule:
+	@$(MAKE) --no-print-directory -C sysmodule
+
+$(RELOCK_NSP): sysmodule
+	@[ -d $(@D) ] || mkdir -p $(@D)
+	@cp -u sysmodule/$(notdir $@) $@
 
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
+	@$(MAKE) --no-print-directory -C sysmodule clean
+	@rm -fr $(ROMFS)
 ifeq ($(strip $(APP_JSON)),)
 	@rm -fr $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf
 else

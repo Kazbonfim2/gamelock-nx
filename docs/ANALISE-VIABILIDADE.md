@@ -278,17 +278,24 @@ GameLock.nro  (homebrew, roda sob o hbmenu)
  └── bloqueio → cria/apaga sdmc:/atmosphere/contents/<TID>/exefs/*.stub
 ```
 
-Um processo, um binário, nada em background. Não há sysmodule nesta arquitetura —
-e é por isso que ela é a mais simples e confiável que encontrei que ainda cumpre
-o bloqueio real. A §6 do RULES pede justificativa técnica para mexer no loader:
-aqui **não** se modifica o loader, usa-se uma funcionalidade documentada dele.
+Um processo, um binário, nada em background. O bloqueio não precisa de sysmodule —
+e é por isso que esta é a arquitetura mais simples e confiável que encontrei que
+ainda cumpre o bloqueio real. A §6 do RULES pede justificativa técnica para mexer
+no loader: aqui **não** se modifica o loader, usa-se uma funcionalidade
+documentada dele.
+
+A Etapa 4b (`gamelock/sysmodule/`, implementada em 2026-11-12) acrescenta um
+sysmodule **opcional** que só refaz stub já existente. Ele não participa do
+bloqueio: sem ele tudo acima continua valendo, com a janela do `B` descrita na
+§5.4.
 
 ## 7. Serviços e interfaces investigados
 
 | Serviço / interface | Para quê | Situação |
 |---|---|---|
 | `ns:am2` (`nsInitialize`) | listar jogos, nome, ícone | **[SRC]** usado |
-| `pm:dmnt` | hook de criação de processo | **[SRC]** inviável (§5.1) |
+| `pm:dmnt` | hook de criação de processo | **[SRC]** inviável para bloquear (§5.1) |
+| `pm:dmnt` | qual aplicação está em foreground | usado no relock da Etapa 4b (`GetApplicationProcessId` + `GetProgramId`) |
 | `pm:shell` | `TerminateProcess` / `TerminateProgram` | só encerra depois de iniciar — descartado |
 | `dmnt:cht` | evento de processo | **[SRC]** inviável (§5.2) |
 | `pctl` / `pctl:a` | controle parental nativo | **[HIP]** §5.3, não usado |
@@ -320,7 +327,12 @@ aqui **não** se modifica o loader, usa-se uma funcionalidade documentada dele.
 1. **UI:** SDL2 + SDL2_image + SDL2_ttf, com a fonte compartilhada do sistema
    (`plGetSharedFontByType`). Aprovado em 2026-11-02.
 2. **Autorização:** liberar até travar de novo, sem sysmodule. Aprovado. A Etapa
-   4b (sysmodule de boot2 que retrava a cada boot) fica em aberto, opcional.
+   4b saiu do "em aberto" em 2026-11-12 e virou `gamelock/sysmodule/`: continua
+   opcional, mas o gatilho não é só o boot — é boot **e** aplicação entrando em
+   foreground, que é o que fecha a janela do `B` (§5.4). Reage depois que o
+   processo do jogo já existe, de propósito: assim o relock nunca corre com o
+   loader lendo o cartão. O hook de `pm:dmnt` da §5.1 segue descartado, agora
+   também por disputa com o `dmnt` do Atmosphère.
 
 ## 10. Estado da implementação (2026-11-06)
 
